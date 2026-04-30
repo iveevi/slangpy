@@ -1,89 +1,71 @@
-[![docs][1]][2] [![ci][3]][4] [![pypi][5]][6]
-
 # SlangPy
 
-[1]: https://readthedocs.org/projects/slangpy/badge/?version=latest
-[2]: https://slangpy.readthedocs.io/en/latest/
-[3]: https://github.com/shader-slang/slangpy/actions/workflows/ci.yml/badge.svg
-[4]: https://github.com/shader-slang/slangpy/actions/workflows/ci.yml
-[5]: https://img.shields.io/pypi/v/slangpy.svg?color=green
-[6]: https://pypi.org/pypi/slangpy
+Fork of [shader-slang/slangpy](https://github.com/shader-slang/slangpy)
+that extends `spy.ui` for building real apps that display slangpy
+compute output through ImGui — dockable windows, the slangpy-rendered
+scene as an `Image` widget, real ImPlot-backed graphs, programmatic
+docking with horizontal/vertical splits, color pickers, and a font API.
+Everything outside `src/sgl/ui/` and `src/slangpy_ext/ui/` matches
+upstream.
 
-## Introduction
+## What's added
 
-SlangPy is a cross-platform library designed to make calling GPU code written in Slang extremely simple and easy. It's core objectives are to:
-- Make it quick and simple to call Slang functions on the GPU from Python
-- Eradicate the boilerplate and bugs associated with writing compute kernels
-- Grant easy access to Slang's auto-diff features
-- Provide optional PyTorch support out of the box
+### New widgets in `spy.ui`
 
-## Documentation
+| Widget | What it wraps |
+|---|---|
+| `ui.Image(parent, texture, size, uv0, uv1)` | `ImGui::Image()` — takes a `sgl.Texture` directly (`ImTextureID` is already typedef'd to `sgl::Texture*` in `imgui_config.h`), so you can display any compute-written texture in a docked window. |
+| `ui.Plot(parent, label, x_label, y_label, size, autofit_x, autofit_y)` | `ImPlot::BeginPlot/SetupAxes/PlotLine/EndPlot`. Methods: `add_line(name, values)`, `push_to_line(name, value, max_history)`, `set_x_limits/set_y_limits`. Real axes, ticks, legend, grid. |
+| `ui.PlotLines(parent, label, values, overlay, scale_min, scale_max, size)` | Lightweight `ImGui::PlotLines` wrapper for sparkline-style plots without the ImPlot dependency. |
+| `ui.Separator(parent, label)` | `ImGui::Separator()` (no label) / `ImGui::SeparatorText(label)`. |
+| `ui.ColorEdit3 / ColorEdit4 / ColorPicker3 / ColorPicker4` | `ImGui::ColorEdit3/4` and `ImGui::ColorPicker3/4` on `float3`/`float4` `ValueProperty`s. |
+| `ui.DockSpace(parent)` | `ImGui::DockSpaceOverViewport` with optional `passthru_central_node` (transparent central pane so the surface shows through). Exposes `request_split_horizontal(ratio)` / `request_split_vertical(ratio)` plus `dock_id` / `left_dock_id` / `right_dock_id` for programmatic docking without dragging. |
+| `ui.Window.dock_id` | Setter that calls `ImGui::SetNextWindowDockID` on the next render — the missing piece for first-launch dock layouts. |
 
-See the [documentation][2] for more detailed information and examples.
+### `ui.Context` API
 
-More information about Slang in general can be found [here](https://shader-slang.com).
+- `add_font(name, path, size, is_default=False)` — load a TTF from disk
+  and register it under `name`.
+- `push_font(name)` / `pop_font()` — `ImGui::PushFont/PopFont` on a
+  registered font.
+- ImPlot context is created/destroyed alongside ImGui's.
+- `io.IniFilename = "imgui.ini"` (was `nullptr`) so the dockspace layout
+  persists across runs.
 
-## Installation
+### `AppWindow.ui_context`
 
-SlangPy is available as pre-compiled wheels via PyPi. Installing SlangPy is as simple as running:
+Read-only property exposing the `ui::Context` that `AppWindow` owns, so
+you can call `add_font` / `push_font` on it after construction.
 
-```bash
-pip install slangpy
-```
+### Build system
 
-To enable PyTorch integration, simply ``pip install pytorch`` as usual and it will be detected automatically by SlangPy.
+- `external/CMakeLists.txt` fetches **ImPlot 0.16** alongside ImGui.
+- ImPlot 0.16 references `IM_OFFSETOF`, `IM_FLOOR`, `ImFont::FontSize`,
+  and `ImFont::FindGlyph`, all of which were removed or moved in
+  ImGui 1.92. The fork patches `implot.cpp` post-fetch (`IM_FLOOR` →
+  `ImFloor`, `font->FindGlyph` → `font->GetFontBaked(g.FontSize)->FindGlyph`,
+  and the `g.FontSize / font->FontSize` scale degenerates to 1.0) and
+  defines `IM_OFFSETOF=offsetof` as a target compile definition.
+- ImPlot's TUs are compiled with `-fvisibility=default` so the binding
+  layer in `slangpy_ext` can link to its symbols out of `libsgl`.
 
-You can also compile SlangPy from source:
+### Rendering fixes (for `ui.Image` correctness)
 
-```bash
-git clone https://github.com/shader-slang/slangpy.git --recursive
-cd slangpy
-pip install .
-```
+`Context::end_frame` was tightened in two places to make `ImGui::Image`
+actually display foreign / compute-written textures on Vulkan:
 
-## License
+1. **Auto state-transition.** Before beginning the ImGui render pass,
+   `end_frame` walks the draw lists, collects every unique texture
+   pointer, and calls `command_encoder->set_texture_state(.., shader_resource)`.
+   Without this, slang-rhi's per-encoder state tracker doesn't insert
+   the UAV → SRV layout barrier for textures that were just written by
+   compute, and the sampler reads zero.
+2. **Per-cmd pipeline rebind.** The render loop binds the pipeline and
+   writes the uniforms (sampler / scale / offset / `is_srgb_format`)
+   *before each draw command*, not just once per pass. slang-rhi's
+   shader objects commit descriptor sets at pipeline-bind time, so
+   mid-pass `set_texture_view` modifications didn't reach the shader on
+   subsequent draws.
 
-SlangPy source code is licensed under the Apache-2.0 License - see the [LICENSE.txt](LICENSE.txt) file for details.
-
-SlangPy depends on the following third-party libraries, which have their own license:
-
-- [argparse](https://github.com/p-ranav/argparse) (MIT)
-- [AsmJit](https://github.com/asmjit/asmjit) (Zlib)
-- [Dear ImGui](https://github.com/ocornut/imgui) (MIT)
-- [doctest](https://github.com/doctest/doctest) (MIT)
-- [fmt](https://fmt.dev/latest/index.html) (MIT)
-- [glfw3](https://www.glfw.org/) (Zlib)
-- [libjpeg-turbo](https://libjpeg-turbo.org/) (BSD)
-- [libpng](http://www.libpng.org/pub/png/libpng.html) (libpng)
-- [lmdb](https://github.com/LMDB/lmdb) (OpenLDAP Public License)
-- [nanobind](https://github.com/wjakob/nanobind) (BSD)
-- [nanothread](https://github.com/mitsuba-renderer/nanothread) (BSD)
-- [NVAPI](https://github.com/NVIDIA/nvapi) (MIT)
-- [OpenEXR](https://openexr.com/en/latest/) (BSD)
-- [pugixml](https://pugixml.org/) (MIT)
-- [RenderDoc API](https://github.com/baldurk/renderdoc) (MIT)
-- [Slang](https://github.com/shader-slang/slang) (MIT)
-- [stb](https://github.com/nothings/stb) (MIT)
-- [tevclient](https://github.com/skallweitNV/tevclient) (BSD)
-- [tinyexr](https://github.com/syoyo/tinyexr) (BSD)
-- [vcpkg](https://vcpkg.io/en/) (MIT)
-- [Vulkan-Headers](https://github.com/KhronosGroup/Vulkan-Headers) (MIT)
-
-SlangPy releases additionally include pre-built binaries of the following third-party components, which have their own license:
-
-- [DirectXShaderCompiler](https://github.com/microsoft/DirectXShaderCompiler) (LLVM Release License)
-- [Agility SDK](https://devblogs.microsoft.com/directx/directx12agility) (MICROSOFT DIRECTX License)
-
-## Citation
-
-If you use SlangPy in a research project leading to a publication, please cite the project. The BibTex entry is:
-
-```bibtex
-@software{slangpy,
-    title = {SlangPy},
-    author = {Simon Kallweit and Chris Cummings and Benedikt Bitterli and Sai Bangaru and Yong He},
-    note = {https://github.com/shader-slang/slangpy},
-    version = {0.41.0},
-    year = 2025
-}
-```
+Together these let you put a compute kernel's output texture in a
+dockable ImGui window via `ui.Image` and see the live contents.
