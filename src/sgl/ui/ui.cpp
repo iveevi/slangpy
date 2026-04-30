@@ -19,9 +19,11 @@
 #include "sgl/device/pipeline.h"
 
 #include <imgui.h>
+#include <implot.h>
 #include <cmrc/cmrc.hpp>
 
 #include <unordered_map>
+#include <set>
 
 CMRC_DECLARE(sgl_data);
 
@@ -277,6 +279,7 @@ Context::Context(ref<Device> device)
 {
     m_imgui_context = ImGui::CreateContext();
     ImGui::SetCurrentContext(m_imgui_context);
+    ImPlot::CreateContext();
 
     m_screen = ref<Screen>(new Screen());
 
@@ -284,7 +287,10 @@ Context::Context(ref<Device> device)
     io.UserData = this;
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard | ImGuiConfigFlags_DockingEnable;
     io.BackendFlags |= ImGuiBackendFlags_RendererHasTextures;
-    io.IniFilename = nullptr;
+    // Persist docking layout so user-positioned windows survive restarts.
+    // ImGui writes/reads from this file in the process CWD; apps that want
+    // a custom path can SetCurrentContext + io.IniFilename before frames.
+    io.IniFilename = "imgui.ini";
     io.ConfigNavCaptureKeyboard = false;
 
     float scale_factor = platform::display_scale_factor();
@@ -360,6 +366,7 @@ Context::~Context()
         }
     }
     m_textures.clear();
+    ImPlot::DestroyContext();
     ImGui::DestroyContext(m_imgui_context);
 }
 
@@ -367,6 +374,34 @@ ImFont* Context::get_font(const char* name)
 {
     auto it = m_fonts.find(name);
     return it == m_fonts.end() ? nullptr : it->second;
+}
+
+void Context::add_font(const char* name, const char* path, float size, bool is_default)
+{
+    ImGui::SetCurrentContext(m_imgui_context);
+    ImGuiIO& io = ImGui::GetIO();
+    ImFont* font = io.Fonts->AddFontFromFileTTF(path, size);
+    if (!font) {
+        log_warn("Context::add_font: failed to load '{}' from {}", name, path);
+        return;
+    }
+    m_fonts[name] = font;
+    if (is_default)
+        io.FontDefault = font;
+}
+
+void Context::push_font(const char* name)
+{
+    ImGui::SetCurrentContext(m_imgui_context);
+    ImFont* font = get_font(name);
+    if (font)
+        ImGui::PushFont(font);
+}
+
+void Context::pop_font()
+{
+    ImGui::SetCurrentContext(m_imgui_context);
+    ImGui::PopFont();
 }
 
 void Context::begin_frame(uint32_t width, uint32_t height, sgl::Window* window)
@@ -446,6 +481,23 @@ void Context::end_frame(TextureView* texture_view, CommandEncoder* command_encod
         vertex_buffer->unmap();
         index_buffer->unmap();
 
+        // Transition every unique texture referenced by draw commands into
+        // shader_resource state. Without this, externally-supplied textures
+        // (e.g. ui::Image) are sampled while still in unordered_access /
+        // copy_destination from earlier work, producing black pixels.
+        {
+            std::set<Texture*> seen;
+            for (int n = 0; n < draw_data->CmdListsCount; n++) {
+                const ImDrawList* cmd_list = draw_data->CmdLists[n];
+                for (int cmd_i = 0; cmd_i < cmd_list->CmdBuffer.Size; cmd_i++) {
+                    const ImDrawCmd* pcmd = &cmd_list->CmdBuffer[cmd_i];
+                    if (auto t = static_cast<Texture*>(pcmd->GetTexID()))
+                        if (seen.insert(t).second)
+                            command_encoder->set_texture_state(t, ResourceState::shader_resource);
+                }
+            }
+        }
+
         // Render command lists.
         auto pass_encoder = command_encoder->begin_render_pass({
             .color_attachments = {
@@ -492,8 +544,19 @@ void Context::end_frame(TextureView* texture_view, CommandEncoder* command_encod
 
                 // Apply scissor/clipping rectangle, bind texture, draw.
                 render_state.scissor_rects[0] = clip_rect;
-                ref<Texture> texture = ref<Texture>(static_cast<Texture*>(pcmd->GetTexID()));
-                shader_object->set_texture(texture_offset, texture);
+                Texture* tex_ptr = static_cast<Texture*>(pcmd->GetTexID());
+                ref<TextureView> view = tex_ptr ? tex_ptr->create_view({}) : nullptr;
+                // Re-bind the pipeline before each draw so slang-rhi
+                // allocates a fresh descriptor set with the new texture.
+                // Without this, mid-pass set_texture_view modifications
+                // don't reach the shader (foreign textures sample as black).
+                shader_object = pass_encoder->bind_pipeline(get_pipeline(texture_view->desc().format));
+                ShaderCursor sc(shader_object);
+                sc["sampler"] = m_sampler;
+                sc["scale"] = 2.f / float2(io.DisplaySize.x, -io.DisplaySize.y);
+                sc["offset"] = float2(-1.f, 1.f);
+                sc["is_srgb_format"] = is_srgb_format;
+                shader_object->set_texture_view(texture_offset, view);
                 pass_encoder->set_render_state(render_state);
                 pass_encoder->draw_indexed({
                     .vertex_count = pcmd->ElemCount,

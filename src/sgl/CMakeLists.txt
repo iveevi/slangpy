@@ -179,9 +179,25 @@ target_sources(sgl PRIVATE
     ${SGL_IMGUI_DIR}/imgui_draw.cpp
     ${SGL_IMGUI_DIR}/imgui_widgets.cpp
     ${SGL_IMGUI_DIR}/imgui_tables.cpp
+
+    ${SGL_IMPLOT_DIR}/implot.h
+    ${SGL_IMPLOT_DIR}/implot_internal.h
+    ${SGL_IMPLOT_DIR}/implot.cpp
+    ${SGL_IMPLOT_DIR}/implot_items.cpp
 )
 
-target_include_directories(sgl PUBLIC ../ ${SGL_IMGUI_DIR})
+target_include_directories(sgl PUBLIC ../ ${SGL_IMGUI_DIR} ${SGL_IMPLOT_DIR})
+# ImGui 1.92 removed IM_OFFSETOF; ImPlot 0.16 still uses it. The offsetof
+# macro is a drop-in replacement.
+target_compile_definitions(sgl PUBLIC IM_OFFSETOF=offsetof)
+# Export ImPlot symbols so the slangpy_ext shared module can call into
+# them. With -fvisibility=hidden (default for sgl), the namespaced
+# ImPlot API stays internal and the binding layer fails to link.
+set_source_files_properties(
+    ${SGL_IMPLOT_DIR}/implot.cpp
+    ${SGL_IMPLOT_DIR}/implot_items.cpp
+    PROPERTIES COMPILE_FLAGS "-fvisibility=default"
+)
 
 # Add macOS Objective-C++ source and find dependencies (only on macOS)
 if(SGL_MACOS)

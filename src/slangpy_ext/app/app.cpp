@@ -6,6 +6,7 @@
 #include "sgl/device/command.h"
 #include "sgl/device/resource.h"
 #include "sgl/ui/widgets.h"
+#include "sgl/ui/ui.h"
 
 namespace sgl {
 
@@ -155,6 +156,7 @@ SGL_PY_EXPORT(app_app)
         )
         .def_prop_ro("device", &AppWindow::device, D(AppWindow, device))
         .def_prop_ro("screen", &AppWindow::screen, D(AppWindow, screen))
+        .def_prop_ro("ui_context", &AppWindow::ui_context)
         .def("render", &AppWindow::render, "render_context"_a, D(AppWindow, render))
         .def("on_resize", &AppWindow::on_resize, "width"_a, "height"_a, D(AppWindow, on_resize))
         .def("on_keyboard_event", &AppWindow::on_keyboard_event, "event"_a, D(AppWindow, on_keyboard_event))

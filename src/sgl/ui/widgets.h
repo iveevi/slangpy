@@ -3,11 +3,15 @@
 #pragma once
 
 #include "sgl/core/object.h"
+#include "sgl/device/fwd.h"
 #include "sgl/math/vector_types.h"
 
 #include <imgui.h>
+#include <imgui_internal.h>
+#include <implot.h>
 
 #include <algorithm>
+#include <map>
 #include <string_view>
 #include <string>
 #include <functional>
@@ -186,6 +190,15 @@ public:
     void show() { set_visible(true); }
     void close() { set_visible(false); }
 
+    /// Dock this window onto the given dock node on its next render.
+    /// Pass \c 0 to detach (let the user dock manually).
+    uint32_t dock_id() const { return m_dock_id; }
+    void set_dock_id(uint32_t dock_id)
+    {
+        m_dock_id = dock_id;
+        m_set_dock_id = true;
+    }
+
     virtual void render() override
     {
         if (!m_visible)
@@ -198,6 +211,10 @@ public:
         if (m_set_size) {
             ImGui::SetNextWindowSize(ImVec2(m_size.x, m_size.y));
             m_set_size = false;
+        }
+        if (m_set_dock_id) {
+            ImGui::SetNextWindowDockID(m_dock_id, ImGuiCond_Always);
+            m_set_dock_id = false;
         }
 
         ScopedID id(this);
@@ -220,6 +237,8 @@ private:
     float2 m_size;
     bool m_set_position{true};
     bool m_set_size{true};
+    uint32_t m_dock_id{0};
+    bool m_set_dock_id{false};
 };
 
 class Group : public Widget {
@@ -284,6 +303,27 @@ public:
 
 private:
     std::string m_text;
+};
+
+class Separator : public Widget {
+    SGL_OBJECT(Separator)
+public:
+    Separator(Widget* parent, std::string_view label = "")
+        : Widget(parent), m_label(label)
+    {
+    }
+    const std::string& label() const { return m_label; }
+    void set_label(std::string_view v) { m_label = v; }
+    virtual void render() override
+    {
+        if (!m_visible) return;
+        if (m_label.empty())
+            ImGui::Separator();
+        else
+            ImGui::SeparatorText(m_label.c_str());
+    }
+private:
+    std::string m_label;
 };
 
 class ProgressBar : public Widget {
@@ -888,6 +928,401 @@ public:
 private:
     bool m_multi_line;
     InputTextFlags m_flags;
+};
+
+/// Displays a GPU texture using ImGui::Image.
+///
+/// The widget samples the texture directly through ImGui's renderer; no CPU
+/// readback. Pass any \c sgl::Texture (e.g. the output of a slangpy compute
+/// kernel) and it will be drawn at \c size pixels. If \c size has any zero
+/// component the texture's mip-0 dimensions are used.
+class Image : public Widget {
+    SGL_OBJECT(Image)
+public:
+    Image(Widget* parent, ref<Texture> texture = nullptr, float2 size = float2(0.f, 0.f),
+          float2 uv0 = float2(0.f, 0.f), float2 uv1 = float2(1.f, 1.f))
+        : Widget(parent)
+        , m_texture(texture)
+        , m_size(size)
+        , m_uv0(uv0)
+        , m_uv1(uv1)
+    {
+    }
+
+    ref<Texture> texture() const { return m_texture; }
+    void set_texture(ref<Texture> texture) { m_texture = texture; }
+
+    float2 size() const { return m_size; }
+    void set_size(const float2& size) { m_size = size; }
+
+    float2 uv0() const { return m_uv0; }
+    void set_uv0(const float2& uv0) { m_uv0 = uv0; }
+
+    float2 uv1() const { return m_uv1; }
+    void set_uv1(const float2& uv1) { m_uv1 = uv1; }
+
+    virtual void render() override
+    {
+        if (!m_visible || !m_texture || m_size.x <= 0.f || m_size.y <= 0.f)
+            return;
+        ScopedID id(this);
+        ScopedDisable disable(!m_enabled);
+        ImGui::Image(
+            reinterpret_cast<ImTextureID>(m_texture.get()),
+            ImVec2(m_size.x, m_size.y),
+            ImVec2(m_uv0.x, m_uv0.y),
+            ImVec2(m_uv1.x, m_uv1.y)
+        );
+    }
+
+private:
+    ref<Texture> m_texture;
+    float2 m_size;
+    float2 m_uv0;
+    float2 m_uv1;
+};
+
+/// Real plotting via ImPlot. A single plot window with one or more line
+/// series, configurable axes (label, range, autofit), legend, grid.
+///
+/// Usage:
+///     plot = ui.Plot(parent, "frame time", x_label="frame", y_label="ms",
+///                    size=(0, 280), autofit_y=True)
+///     plot.add_line("ms", values_list)            # add or update a line
+///     plot.set_y_limits(0.0, 33.0)                # optional manual limit
+///
+/// Each `add_line` call replaces the named series' data. Series keep their
+/// label (used in the legend) and their values (a copy of the list).
+class Plot : public Widget {
+    SGL_OBJECT(Plot)
+public:
+    Plot(Widget* parent, std::string_view label = "plot",
+         std::string_view x_label = "", std::string_view y_label = "",
+         float2 size = float2(-1.f, 200.f), bool autofit_x = true,
+         bool autofit_y = true)
+        : Widget(parent)
+        , m_label(label)
+        , m_x_label(x_label)
+        , m_y_label(y_label)
+        , m_size(size)
+        , m_autofit_x(autofit_x)
+        , m_autofit_y(autofit_y)
+    {
+    }
+
+    const std::string& label() const { return m_label; }
+    void set_label(std::string_view v) { m_label = v; }
+    const std::string& x_label() const { return m_x_label; }
+    void set_x_label(std::string_view v) { m_x_label = v; }
+    const std::string& y_label() const { return m_y_label; }
+    void set_y_label(std::string_view v) { m_y_label = v; }
+    float2 size() const { return m_size; }
+    void set_size(const float2& v) { m_size = v; }
+    bool autofit_x() const { return m_autofit_x; }
+    void set_autofit_x(bool v) { m_autofit_x = v; }
+    bool autofit_y() const { return m_autofit_y; }
+    void set_autofit_y(bool v) { m_autofit_y = v; }
+
+    void set_x_limits(float lo, float hi) { m_x_min = lo; m_x_max = hi; m_has_x_limits = true; }
+    void set_y_limits(float lo, float hi) { m_y_min = lo; m_y_max = hi; m_has_y_limits = true; }
+    void clear_limits() { m_has_x_limits = m_has_y_limits = false; }
+
+    /// Set or update a named line series. Stored by name; calling again
+    /// with the same name replaces the values.
+    void add_line(std::string_view name, std::vector<float> values)
+    {
+        std::string n(name);
+        m_series[n] = std::move(values);
+        if (std::find(m_series_order.begin(), m_series_order.end(), n) == m_series_order.end())
+            m_series_order.push_back(n);
+    }
+
+    /// Append a single sample to an existing series (rolls the buffer).
+    void push_to_line(std::string_view name, float value, size_t max_history = 0)
+    {
+        std::string n(name);
+        auto& v = m_series[n];
+        if (std::find(m_series_order.begin(), m_series_order.end(), n) == m_series_order.end())
+            m_series_order.push_back(n);
+        v.push_back(value);
+        if (max_history > 0 && v.size() > max_history)
+            v.erase(v.begin(), v.end() - max_history);
+    }
+
+    void clear() { m_series.clear(); m_series_order.clear(); }
+
+    virtual void render() override
+    {
+        if (!m_visible) return;
+        ScopedID id(this);
+        ScopedDisable disable(!m_enabled);
+        if (ImPlot::BeginPlot(m_label.c_str(), ImVec2(m_size.x, m_size.y))) {
+            ImPlotAxisFlags x_flags = m_autofit_x ? ImPlotAxisFlags_AutoFit : 0;
+            ImPlotAxisFlags y_flags = m_autofit_y ? ImPlotAxisFlags_AutoFit : 0;
+            ImPlot::SetupAxes(
+                m_x_label.empty() ? nullptr : m_x_label.c_str(),
+                m_y_label.empty() ? nullptr : m_y_label.c_str(),
+                x_flags, y_flags
+            );
+            if (m_has_x_limits)
+                ImPlot::SetupAxisLimits(ImAxis_X1, m_x_min, m_x_max, ImPlotCond_Always);
+            if (m_has_y_limits)
+                ImPlot::SetupAxisLimits(ImAxis_Y1, m_y_min, m_y_max, ImPlotCond_Always);
+            for (const auto& name : m_series_order) {
+                const auto& vals = m_series.at(name);
+                if (!vals.empty())
+                    ImPlot::PlotLine(name.c_str(), vals.data(), static_cast<int>(vals.size()));
+            }
+            ImPlot::EndPlot();
+        }
+    }
+
+private:
+    std::string m_label;
+    std::string m_x_label;
+    std::string m_y_label;
+    float2 m_size;
+    bool m_autofit_x;
+    bool m_autofit_y;
+    bool m_has_x_limits{false};
+    bool m_has_y_limits{false};
+    float m_x_min{0.f}, m_x_max{0.f};
+    float m_y_min{0.f}, m_y_max{0.f};
+    std::map<std::string, std::vector<float>> m_series;
+    std::vector<std::string> m_series_order;
+};
+
+/// Line plot of an in-memory float buffer (uses ImGui::PlotLines).
+///
+/// The internal buffer is a circular ring: \c push_value() rolls the newest
+/// sample in at the right. Useful for FPS / frame-time graphs without a full
+/// ImPlot dependency.
+class PlotLines : public Widget {
+    SGL_OBJECT(PlotLines)
+public:
+    PlotLines(Widget* parent, std::string_view label = "", std::vector<float> values = {},
+              std::string_view overlay = "",
+              float scale_min = std::numeric_limits<float>::max(),
+              float scale_max = std::numeric_limits<float>::max(),
+              float2 size = float2(0.f, 80.f))
+        : Widget(parent)
+        , m_label(label)
+        , m_values(std::move(values))
+        , m_overlay(overlay)
+        , m_scale_min(scale_min)
+        , m_scale_max(scale_max)
+        , m_size(size)
+    {
+    }
+
+    const std::string& label() const { return m_label; }
+    void set_label(std::string_view label) { m_label = label; }
+
+    const std::vector<float>& values() const { return m_values; }
+    void set_values(std::vector<float> values) { m_values = std::move(values); }
+
+    /// Pop the front, push \c v at the back (rolling buffer).
+    void push_value(float v)
+    {
+        if (m_values.empty()) {
+            m_values.push_back(v);
+        } else {
+            std::rotate(m_values.begin(), m_values.begin() + 1, m_values.end());
+            m_values.back() = v;
+        }
+    }
+
+    const std::string& overlay() const { return m_overlay; }
+    void set_overlay(std::string_view overlay) { m_overlay = overlay; }
+
+    float scale_min() const { return m_scale_min; }
+    void set_scale_min(float v) { m_scale_min = v; }
+
+    float scale_max() const { return m_scale_max; }
+    void set_scale_max(float v) { m_scale_max = v; }
+
+    float2 size() const { return m_size; }
+    void set_size(const float2& size) { m_size = size; }
+
+    virtual void render() override
+    {
+        if (!m_visible) return;
+        ScopedID id(this);
+        ScopedDisable disable(!m_enabled);
+        const char* overlay = m_overlay.empty() ? nullptr : m_overlay.c_str();
+        ImGui::PlotLines(
+            m_label.c_str(),
+            m_values.data(),
+            static_cast<int>(m_values.size()),
+            /*values_offset*/ 0,
+            overlay,
+            m_scale_min,
+            m_scale_max,
+            ImVec2(m_size.x, m_size.y)
+        );
+    }
+
+private:
+    std::string m_label;
+    std::vector<float> m_values;
+    std::string m_overlay;
+    float m_scale_min;
+    float m_scale_max;
+    float2 m_size;
+};
+
+/// Editable color swatch (ImGui::ColorEdit3 / ColorEdit4).
+class ColorEdit3 : public ValueProperty<float3> {
+    SGL_OBJECT(ColorEdit3)
+public:
+    using Base = ValueProperty<float3>;
+    ColorEdit3(Widget* parent, std::string_view label = "", float3 value = float3(0.f),
+               Callback callback = {})
+        : Base(parent, label, value, callback)
+    {
+    }
+    virtual void render() override
+    {
+        if (!m_visible) return;
+        ScopedID id(this); ScopedDisable disable(!m_enabled);
+        if (ImGui::ColorEdit3(m_label.c_str(), &m_value.x))
+            notify();
+    }
+};
+
+class ColorEdit4 : public ValueProperty<float4> {
+    SGL_OBJECT(ColorEdit4)
+public:
+    using Base = ValueProperty<float4>;
+    ColorEdit4(Widget* parent, std::string_view label = "", float4 value = float4(0.f),
+               Callback callback = {})
+        : Base(parent, label, value, callback)
+    {
+    }
+    virtual void render() override
+    {
+        if (!m_visible) return;
+        ScopedID id(this); ScopedDisable disable(!m_enabled);
+        if (ImGui::ColorEdit4(m_label.c_str(), &m_value.x))
+            notify();
+    }
+};
+
+/// Inline color picker block (ImGui::ColorPicker3 / ColorPicker4).
+class ColorPicker3 : public ValueProperty<float3> {
+    SGL_OBJECT(ColorPicker3)
+public:
+    using Base = ValueProperty<float3>;
+    ColorPicker3(Widget* parent, std::string_view label = "", float3 value = float3(0.f),
+                 Callback callback = {})
+        : Base(parent, label, value, callback)
+    {
+    }
+    virtual void render() override
+    {
+        if (!m_visible) return;
+        ScopedID id(this); ScopedDisable disable(!m_enabled);
+        if (ImGui::ColorPicker3(m_label.c_str(), &m_value.x))
+            notify();
+    }
+};
+
+class ColorPicker4 : public ValueProperty<float4> {
+    SGL_OBJECT(ColorPicker4)
+public:
+    using Base = ValueProperty<float4>;
+    ColorPicker4(Widget* parent, std::string_view label = "", float4 value = float4(0.f),
+                 Callback callback = {})
+        : Base(parent, label, value, callback)
+    {
+    }
+    virtual void render() override
+    {
+        if (!m_visible) return;
+        ScopedID id(this); ScopedDisable disable(!m_enabled);
+        if (ImGui::ColorPicker4(m_label.c_str(), &m_value.x))
+            notify();
+    }
+};
+
+/// Full-viewport dock space. Add this to the Screen and dock Window widgets
+/// onto it (drag a window's title bar onto the central node, or use
+/// \c Window.dock_id() / set_dock_id() for programmatic docking).
+///
+/// To set up a split layout programmatically, call \c request_split_horizontal
+/// (or \c request_split_vertical), then on the next render the two child node
+/// ids are populated; assign them to two windows via \c Window.set_dock_id.
+class DockSpace : public Widget {
+    SGL_OBJECT(DockSpace)
+public:
+    DockSpace(Widget* parent)
+        : Widget(parent)
+    {
+    }
+
+    /// Root dock node id. Populated after the first render.
+    uint32_t dock_id() const { return m_dock_id; }
+    /// Left / right child node ids after a horizontal split (or top / bottom
+    /// after a vertical one). Populated once the requested split has been
+    /// applied. Zero until then.
+    uint32_t left_dock_id() const { return m_left_id; }
+    uint32_t right_dock_id() const { return m_right_id; }
+
+    /// Request the next render to (re)build a left/right split where the left
+    /// pane occupies \c ratio of the width. Causes any existing layout
+    /// for this dockspace to be reset.
+    void request_split_horizontal(float ratio)
+    {
+        m_split_dir = SplitDir::Horizontal;
+        m_split_ratio = ratio;
+    }
+
+    /// Same as above but top/bottom (left = top, right = bottom).
+    void request_split_vertical(float ratio)
+    {
+        m_split_dir = SplitDir::Vertical;
+        m_split_ratio = ratio;
+    }
+
+    /// Make the central dock node transparent so the surface (or whatever
+    /// is rendered behind ImGui) shows through where no docked window
+    /// covers it. Useful for rendering a slangpy compute output to the
+    /// surface and overlaying floating control windows.
+    bool passthru_central_node() const { return m_passthru; }
+    void set_passthru_central_node(bool v) { m_passthru = v; }
+
+    virtual void render() override
+    {
+        if (!m_visible) return;
+        ImGuiDockNodeFlags flags = m_passthru
+            ? ImGuiDockNodeFlags_PassthruCentralNode
+            : ImGuiDockNodeFlags_None;
+        ImGuiID id = ImGui::DockSpaceOverViewport(0, ImGui::GetMainViewport(), flags);
+        m_dock_id = static_cast<uint32_t>(id);
+
+        if (m_split_dir != SplitDir::None) {
+            ImGui::DockBuilderRemoveNode(id);
+            ImGui::DockBuilderAddNode(id, ImGuiDockNodeFlags_DockSpace);
+            ImGui::DockBuilderSetNodeSize(id, ImGui::GetMainViewport()->Size);
+            ImGuiID a = 0, b = 0;
+            ImGuiDir dir = (m_split_dir == SplitDir::Horizontal) ? ImGuiDir_Left : ImGuiDir_Up;
+            ImGui::DockBuilderSplitNode(id, dir, m_split_ratio, &a, &b);
+            m_left_id = static_cast<uint32_t>(a);
+            m_right_id = static_cast<uint32_t>(b);
+            ImGui::DockBuilderFinish(id);
+            m_split_dir = SplitDir::None;
+        }
+        Widget::render();
+    }
+
+private:
+    enum class SplitDir { None, Horizontal, Vertical };
+    uint32_t m_dock_id{0};
+    uint32_t m_left_id{0};
+    uint32_t m_right_id{0};
+    SplitDir m_split_dir{SplitDir::None};
+    float m_split_ratio{0.7f};
+    bool m_passthru{false};
 };
 
 } // namespace sgl::ui

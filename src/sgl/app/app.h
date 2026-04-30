@@ -75,6 +75,9 @@ public:
 
     ui::Screen* screen() const;
 
+    /// Access the underlying ImGui Context (for add_font, push_font, etc.).
+    ui::Context* ui_context() const { return m_ui_context; }
+
     struct RenderContext {
         Texture* surface_texture;
         CommandEncoder* command_encoder;
