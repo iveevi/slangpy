@@ -56,5 +56,12 @@ SGL_PY_EXPORT(ui)
         )
         .def("handle_keyboard_event", &ui::Context::handle_keyboard_event, "event"_a, D(Context, handle_keyboard_event))
         .def("handle_mouse_event", &ui::Context::handle_mouse_event, "event"_a, D(Context, handle_mouse_event))
+        .def(
+            "add_font",
+            &ui::Context::add_font,
+            "name"_a, "path"_a, "size"_a, "is_default"_a = false
+        )
+        .def("push_font", &ui::Context::push_font, "name"_a)
+        .def("pop_font", &ui::Context::pop_font)
         .def_prop_ro("screen", &ui::Context::screen, D(Context, screen));
 }

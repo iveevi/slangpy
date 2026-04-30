@@ -3,6 +3,11 @@
 #include "nanobind.h"
 
 #include "sgl/ui/widgets.h"
+// nanobind needs the full Texture type (not just a fwd decl) to instantiate
+// ref<Texture> bindings. Including resource.h drags in sgl::Window via
+// transitive headers, which becomes ambiguous with sgl::ui::Window inside
+// SGL_PY_EXPORT below -- every Window reference there is qualified ui::Window.
+#include "sgl/device/resource.h"
 
 #undef D
 #define D(...) DOC(sgl, ui, __VA_ARGS__)
@@ -170,7 +175,7 @@ SGL_PY_EXPORT(ui_widgets)
 
     nb::class_<Screen, Widget>(ui, "Screen", D(Screen));
 
-    nb::class_<Window, Widget>(ui, "Window", D(Window))
+    nb::class_<ui::Window, Widget>(ui, "Window", D(Window))
         .def(
             nb::init<Widget*, std::string_view, float2, float2>(),
             "parent"_a.none(),
@@ -179,11 +184,12 @@ SGL_PY_EXPORT(ui_widgets)
             "size"_a = float2(400.f, 400.f),
             D(Window, Window)
         )
-        .def("show", &Window::show, D(Window, show))
-        .def("close", &Window::close, D(Window, close))
-        .def_prop_rw("title", &Window::title, &Window::set_title, D(Window, title))
-        .def_prop_rw("position", &Window::position, &Window::set_position, D(Window, position))
-        .def_prop_rw("size", &Window::size, &Window::set_size, D(Window, size));
+        .def("show", &ui::Window::show, D(Window, show))
+        .def("close", &ui::Window::close, D(Window, close))
+        .def_prop_rw("title", &ui::Window::title, &ui::Window::set_title, D(Window, title))
+        .def_prop_rw("position", &ui::Window::position, &ui::Window::set_position, D(Window, position))
+        .def_prop_rw("size", &ui::Window::size, &ui::Window::set_size, D(Window, size))
+        .def_prop_rw("dock_id", &ui::Window::dock_id, &ui::Window::set_dock_id);
 
     nb::class_<Group, Widget>(ui, "Group")
         .def(nb::init<Widget*, std::string_view>(), "parent"_a.none(), "label"_a = "", D(Group, Group))
@@ -192,6 +198,11 @@ SGL_PY_EXPORT(ui_widgets)
     nb::class_<Text, Widget>(ui, "Text")
         .def(nb::init<Widget*, std::string_view>(), "parent"_a.none(), "text"_a = "", D(Text, Text))
         .def_prop_rw("text", &Text::text, &Text::set_text, D(Text, text));
+
+    nb::class_<Separator, Widget>(ui, "Separator")
+        .def(nb::init<Widget*, std::string_view>(),
+             "parent"_a.none(), "label"_a = "")
+        .def_prop_rw("label", &Separator::label, &Separator::set_label);
 
     nb::class_<ProgressBar, Widget>(ui, "ProgressBar", D(ProgressBar))
         .def(nb::init<Widget*, float>(), "parent"_a.none(), "fraction"_a = 0.f, D(ProgressBar, ProgressBar))
@@ -328,4 +339,98 @@ SGL_PY_EXPORT(ui_widgets)
             "flags"_a = InputTextFlags::none,
             D(InputText, InputText)
         );
+
+    nb::class_<Image, Widget>(ui, "Image")
+        .def(
+            nb::init<Widget*, ref<Texture>, float2, float2, float2>(),
+            "parent"_a.none(),
+            "texture"_a = nb::none(),
+            "size"_a = float2(0.f, 0.f),
+            "uv0"_a = float2(0.f, 0.f),
+            "uv1"_a = float2(1.f, 1.f)
+        )
+        .def_prop_rw("texture", &Image::texture, &Image::set_texture)
+        .def_prop_rw("size", &Image::size, &Image::set_size)
+        .def_prop_rw("uv0", &Image::uv0, &Image::set_uv0)
+        .def_prop_rw("uv1", &Image::uv1, &Image::set_uv1);
+
+    nb::class_<PlotLines, Widget>(ui, "PlotLines")
+        .def(
+            nb::init<Widget*, std::string_view, std::vector<float>, std::string_view, float, float, float2>(),
+            "parent"_a.none(),
+            "label"_a = "",
+            "values"_a = std::vector<float>{},
+            "overlay"_a = "",
+            "scale_min"_a = std::numeric_limits<float>::max(),
+            "scale_max"_a = std::numeric_limits<float>::max(),
+            "size"_a = float2(0.f, 80.f)
+        )
+        .def_prop_rw("label", &PlotLines::label, &PlotLines::set_label)
+        .def_prop_rw("values", &PlotLines::values, &PlotLines::set_values)
+        .def("push_value", &PlotLines::push_value, "value"_a)
+        .def_prop_rw("overlay", &PlotLines::overlay, &PlotLines::set_overlay)
+        .def_prop_rw("scale_min", &PlotLines::scale_min, &PlotLines::set_scale_min)
+        .def_prop_rw("scale_max", &PlotLines::scale_max, &PlotLines::set_scale_max)
+        .def_prop_rw("size", &PlotLines::size, &PlotLines::set_size);
+
+    nb::class_<ColorEdit3, ValueProperty<float3>>(ui, "ColorEdit3")
+        .def(
+            nb::init<Widget*, std::string_view, float3, ColorEdit3::Callback>(),
+            "parent"_a.none(), "label"_a = "", "value"_a = float3(0.f),
+            "callback"_a = ColorEdit3::Callback{}
+        );
+    nb::class_<ColorEdit4, ValueProperty<float4>>(ui, "ColorEdit4")
+        .def(
+            nb::init<Widget*, std::string_view, float4, ColorEdit4::Callback>(),
+            "parent"_a.none(), "label"_a = "", "value"_a = float4(0.f),
+            "callback"_a = ColorEdit4::Callback{}
+        );
+    nb::class_<ColorPicker3, ValueProperty<float3>>(ui, "ColorPicker3")
+        .def(
+            nb::init<Widget*, std::string_view, float3, ColorPicker3::Callback>(),
+            "parent"_a.none(), "label"_a = "", "value"_a = float3(0.f),
+            "callback"_a = ColorPicker3::Callback{}
+        );
+    nb::class_<ColorPicker4, ValueProperty<float4>>(ui, "ColorPicker4")
+        .def(
+            nb::init<Widget*, std::string_view, float4, ColorPicker4::Callback>(),
+            "parent"_a.none(), "label"_a = "", "value"_a = float4(0.f),
+            "callback"_a = ColorPicker4::Callback{}
+        );
+
+    nb::class_<Plot, Widget>(ui, "Plot")
+        .def(
+            nb::init<Widget*, std::string_view, std::string_view, std::string_view,
+                     float2, bool, bool>(),
+            "parent"_a.none(),
+            "label"_a = "plot",
+            "x_label"_a = "",
+            "y_label"_a = "",
+            "size"_a = float2(0.f, 200.f),
+            "autofit_x"_a = true,
+            "autofit_y"_a = true
+        )
+        .def_prop_rw("label", &Plot::label, &Plot::set_label)
+        .def_prop_rw("x_label", &Plot::x_label, &Plot::set_x_label)
+        .def_prop_rw("y_label", &Plot::y_label, &Plot::set_y_label)
+        .def_prop_rw("size", &Plot::size, &Plot::set_size)
+        .def_prop_rw("autofit_x", &Plot::autofit_x, &Plot::set_autofit_x)
+        .def_prop_rw("autofit_y", &Plot::autofit_y, &Plot::set_autofit_y)
+        .def("set_x_limits", &Plot::set_x_limits, "lo"_a, "hi"_a)
+        .def("set_y_limits", &Plot::set_y_limits, "lo"_a, "hi"_a)
+        .def("clear_limits", &Plot::clear_limits)
+        .def("add_line", &Plot::add_line, "name"_a, "values"_a)
+        .def("push_to_line", &Plot::push_to_line, "name"_a, "value"_a, "max_history"_a = 0)
+        .def("clear", &Plot::clear);
+
+    nb::class_<DockSpace, Widget>(ui, "DockSpace")
+        .def(nb::init<Widget*>(), "parent"_a.none())
+        .def_prop_ro("dock_id", &DockSpace::dock_id)
+        .def_prop_ro("left_dock_id", &DockSpace::left_dock_id)
+        .def_prop_ro("right_dock_id", &DockSpace::right_dock_id)
+        .def("request_split_horizontal", &DockSpace::request_split_horizontal, "ratio"_a)
+        .def("request_split_vertical", &DockSpace::request_split_vertical, "ratio"_a)
+        .def_prop_rw("passthru_central_node",
+                     &DockSpace::passthru_central_node,
+                     &DockSpace::set_passthru_central_node);
 }

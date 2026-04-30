@@ -253,6 +253,31 @@ set(IMGUI_VERSION "1.92.7-docking")
 sgl_download_package(imgui "https://github.com/ocornut/imgui/archive/refs/tags/v${IMGUI_VERSION}.zip")
 set(SGL_IMGUI_DIR ${imgui_SOURCE_DIR} PARENT_SCOPE)
 
+# implot (for proper plotting widgets with axes, ticks, legend, etc.)
+
+set(IMPLOT_VERSION "0.16")
+sgl_download_package(implot "https://github.com/epezent/implot/archive/refs/tags/v${IMPLOT_VERSION}.zip")
+set(SGL_IMPLOT_DIR ${implot_SOURCE_DIR} PARENT_SCOPE)
+
+# ImPlot 0.16 uses several ImGui internals that were renamed/removed in
+# ImGui 1.92 (IM_FLOOR, ImFont::FontSize, ImFont::FindGlyph). Patch them
+# in place on the fetched source so it builds against modern ImGui.
+set(_implot_cpp "${implot_SOURCE_DIR}/implot.cpp")
+if(EXISTS "${_implot_cpp}")
+    file(READ "${_implot_cpp}" _src)
+    string(REPLACE "IM_FLOOR" "ImFloor" _src "${_src}")
+    # font->FontSize -> baked font size from current g.FontSize. The two
+    # references happen inside AddTextVertical where 'font' is g.Font, so
+    # the scale factor degenerates to 1.0.
+    string(REPLACE "g.FontSize / font->FontSize" "1.0f" _src "${_src}")
+    # font->FindGlyph((ImWchar)c) -> via the baked font
+    string(REPLACE
+        "font->FindGlyph((ImWchar)c)"
+        "font->GetFontBaked(g.FontSize)->FindGlyph((ImWchar)c)"
+        _src "${_src}")
+    file(WRITE "${_implot_cpp}" "${_src}")
+endif()
+
 # header only
 
 add_library(header_only INTERFACE)

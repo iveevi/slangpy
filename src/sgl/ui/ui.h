@@ -30,6 +30,18 @@ public:
 
     ImFont* get_font(const char* name);
 
+    /// Load a TTF font from disk and register it under \c name. The font is
+    /// rasterised at \c size pixels. If \c is_default is true the new font
+    /// becomes the default ImGui font (used unless PushFont is called).
+    /// Must be called BEFORE the first frame -- adding fonts mid-frame
+    /// invalidates ImGui's atlas.
+    void add_font(const char* name, const char* path, float size, bool is_default = false);
+
+    /// Apply a previously-loaded font to subsequent widgets (until pop_font).
+    /// Convenience wrapper for ImGui::PushFont(get_font(name)).
+    void push_font(const char* name);
+    void pop_font();
+
     /// Begin a new ImGui frame and renders the main screen widget.
     /// ImGui widget calls are generally only valid between `begin_frame` and `end_frame`.
     /// \param width Render texture width
