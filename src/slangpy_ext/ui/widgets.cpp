@@ -414,7 +414,7 @@ SGL_PY_EXPORT(ui_widgets)
     nb::class_<Plot, Widget>(ui, "Plot")
         .def(
             nb::init<Widget*, std::string_view, std::string_view, std::string_view,
-                     float2, bool, bool, LegendLocation, bool>(),
+                     float2, bool, bool, LegendLocation, bool, bool>(),
             "parent"_a.none(),
             "label"_a = "plot",
             "x_label"_a = "",
@@ -423,7 +423,8 @@ SGL_PY_EXPORT(ui_widgets)
             "autofit_x"_a = true,
             "autofit_y"_a = true,
             "legend_location"_a = LegendLocation::north_west,
-            "legend_outside"_a = false
+            "legend_outside"_a = false,
+            "legend_horizontal"_a = false
         )
         .def_prop_rw("label", &Plot::label, &Plot::set_label)
         .def_prop_rw("x_label", &Plot::x_label, &Plot::set_x_label)
@@ -435,6 +436,8 @@ SGL_PY_EXPORT(ui_widgets)
                      &Plot::legend_location, &Plot::set_legend_location)
         .def_prop_rw("legend_outside",
                      &Plot::legend_outside, &Plot::set_legend_outside)
+        .def_prop_rw("legend_horizontal",
+                     &Plot::legend_horizontal, &Plot::set_legend_horizontal)
         .def("set_x_limits", &Plot::set_x_limits, "lo"_a, "hi"_a)
         .def("set_y_limits", &Plot::set_y_limits, "lo"_a, "hi"_a)
         .def("clear_limits", &Plot::clear_limits)

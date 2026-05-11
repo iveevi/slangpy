@@ -1050,7 +1050,8 @@ public:
          float2 size = float2(-1.f, 200.f), bool autofit_x = true,
          bool autofit_y = true,
          LegendLocation legend_location = LegendLocation::north_west,
-         bool legend_outside = false)
+         bool legend_outside = false,
+         bool legend_horizontal = false)
         : Widget(parent)
         , m_label(label)
         , m_x_label(x_label)
@@ -1060,6 +1061,7 @@ public:
         , m_autofit_y(autofit_y)
         , m_legend_location(legend_location)
         , m_legend_outside(legend_outside)
+        , m_legend_horizontal(legend_horizontal)
     {
     }
 
@@ -1079,6 +1081,8 @@ public:
     void set_legend_location(LegendLocation v) { m_legend_location = v; }
     bool legend_outside() const { return m_legend_outside; }
     void set_legend_outside(bool v) { m_legend_outside = v; }
+    bool legend_horizontal() const { return m_legend_horizontal; }
+    void set_legend_horizontal(bool v) { m_legend_horizontal = v; }
 
     void set_x_limits(float lo, float hi) { m_x_min = lo; m_x_max = hi; m_has_x_limits = true; }
     void set_y_limits(float lo, float hi) { m_y_min = lo; m_y_max = hi; m_has_y_limits = true; }
@@ -1182,9 +1186,11 @@ public:
                 // Convert our enum (kept ABI-compatible with ImPlotLocation_)
                 // and toggle Outside via the legend flags.
                 ImPlotLocation loc = static_cast<ImPlotLocation>(m_legend_location);
-                ImPlotLegendFlags lf = m_legend_outside
-                    ? ImPlotLegendFlags_Outside
-                    : 0;
+                ImPlotLegendFlags lf = 0;
+                if (m_legend_outside)
+                    lf |= ImPlotLegendFlags_Outside;
+                if (m_legend_horizontal)
+                    lf |= ImPlotLegendFlags_Horizontal;
                 ImPlot::SetupLegend(loc, lf);
             }
             if (m_has_x_limits)
@@ -1253,6 +1259,7 @@ private:
     float m_y_min{0.f}, m_y_max{0.f};
     LegendLocation m_legend_location{LegendLocation::north_west};
     bool m_legend_outside{false};
+    bool m_legend_horizontal{false};
     std::map<std::string, Series> m_series;
     std::vector<std::string> m_series_order;
     // Bar-groups overlay (PlotBarGroups). Stored separately from m_series
