@@ -33,7 +33,13 @@ SGL_PY_EXPORT(core_window)
     nb::class_<Window, Object> window(m, "Window", gc_helper_type_slots<Window>(), D(Window));
     window.def(
         "__init__",
-        [](Window* window, uint32_t width, uint32_t height, std::string title, WindowMode mode, bool resizable)
+        [](Window* window,
+           uint32_t width,
+           uint32_t height,
+           std::string title,
+           WindowMode mode,
+           bool resizable,
+           bool decorated)
         {
             new (window) Window({
                 .width = width,
@@ -41,6 +47,7 @@ SGL_PY_EXPORT(core_window)
                 .title = title,
                 .mode = mode,
                 .resizable = resizable,
+                .decorated = decorated,
             });
         },
         "width"_a = 1024,
@@ -48,6 +55,7 @@ SGL_PY_EXPORT(core_window)
         "title"_a = "slangpy",
         "mode"_a = WindowMode::normal,
         "resizable"_a = true,
+        "decorated"_a = true,
         D(Window, Window)
     );
     window.def_prop_rw("width", &Window::width, &Window::set_width, D(Window, width));

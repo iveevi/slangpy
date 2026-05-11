@@ -374,6 +374,10 @@ Window::Window(WindowDesc desc)
         glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
     }
 
+    if (desc.decorated == false) {
+        glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);
+    }
+
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 
     m_window = glfwCreateWindow(m_width, m_height, m_title.c_str(), NULL, NULL);

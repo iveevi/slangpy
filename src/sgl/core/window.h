@@ -50,6 +50,9 @@ struct WindowDesc {
     WindowMode mode{WindowMode::normal};
     /// Whether the window is resizable.
     bool resizable{true};
+    /// Whether the window has OS/WM decorations (title bar, borders,
+    /// min/max/close buttons). Set false for a borderless window.
+    bool decorated{true};
 };
 
 /// Mouse cursor modes.
