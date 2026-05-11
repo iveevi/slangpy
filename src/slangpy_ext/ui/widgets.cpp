@@ -400,17 +400,30 @@ SGL_PY_EXPORT(ui_widgets)
             "callback"_a = ColorPicker4::Callback{}
         );
 
+    nb::enum_<LegendLocation>(ui, "LegendLocation")
+        .value("center",     LegendLocation::center)
+        .value("north",      LegendLocation::north)
+        .value("south",      LegendLocation::south)
+        .value("west",       LegendLocation::west)
+        .value("east",       LegendLocation::east)
+        .value("north_west", LegendLocation::north_west)
+        .value("north_east", LegendLocation::north_east)
+        .value("south_west", LegendLocation::south_west)
+        .value("south_east", LegendLocation::south_east);
+
     nb::class_<Plot, Widget>(ui, "Plot")
         .def(
             nb::init<Widget*, std::string_view, std::string_view, std::string_view,
-                     float2, bool, bool>(),
+                     float2, bool, bool, LegendLocation, bool>(),
             "parent"_a.none(),
             "label"_a = "plot",
             "x_label"_a = "",
             "y_label"_a = "",
             "size"_a = float2(0.f, 200.f),
             "autofit_x"_a = true,
-            "autofit_y"_a = true
+            "autofit_y"_a = true,
+            "legend_location"_a = LegendLocation::north_west,
+            "legend_outside"_a = false
         )
         .def_prop_rw("label", &Plot::label, &Plot::set_label)
         .def_prop_rw("x_label", &Plot::x_label, &Plot::set_x_label)
@@ -418,6 +431,10 @@ SGL_PY_EXPORT(ui_widgets)
         .def_prop_rw("size", &Plot::size, &Plot::set_size)
         .def_prop_rw("autofit_x", &Plot::autofit_x, &Plot::set_autofit_x)
         .def_prop_rw("autofit_y", &Plot::autofit_y, &Plot::set_autofit_y)
+        .def_prop_rw("legend_location",
+                     &Plot::legend_location, &Plot::set_legend_location)
+        .def_prop_rw("legend_outside",
+                     &Plot::legend_outside, &Plot::set_legend_outside)
         .def("set_x_limits", &Plot::set_x_limits, "lo"_a, "hi"_a)
         .def("set_y_limits", &Plot::set_y_limits, "lo"_a, "hi"_a)
         .def("clear_limits", &Plot::clear_limits)

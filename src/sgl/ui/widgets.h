@@ -1017,6 +1017,20 @@ private:
     float2 m_uv1;
 };
 
+/// Anchor used to place a plot's legend, mirroring ImPlotLocation_*.
+/// Compass-direction names (north = top, south = bottom, etc.).
+enum class LegendLocation : int {
+    center     = 0,
+    north      = 1 << 0,
+    south      = 1 << 1,
+    west       = 1 << 2,
+    east       = 1 << 3,
+    north_west = north | west,   // top-left
+    north_east = north | east,   // top-right (ImPlot default)
+    south_west = south | west,   // bottom-left
+    south_east = south | east,   // bottom-right
+};
+
 /// Real plotting via ImPlot. A single plot window with one or more line
 /// series, configurable axes (label, range, autofit), legend, grid.
 ///
@@ -1034,7 +1048,9 @@ public:
     Plot(Widget* parent, std::string_view label = "plot",
          std::string_view x_label = "", std::string_view y_label = "",
          float2 size = float2(-1.f, 200.f), bool autofit_x = true,
-         bool autofit_y = true)
+         bool autofit_y = true,
+         LegendLocation legend_location = LegendLocation::north_west,
+         bool legend_outside = false)
         : Widget(parent)
         , m_label(label)
         , m_x_label(x_label)
@@ -1042,6 +1058,8 @@ public:
         , m_size(size)
         , m_autofit_x(autofit_x)
         , m_autofit_y(autofit_y)
+        , m_legend_location(legend_location)
+        , m_legend_outside(legend_outside)
     {
     }
 
@@ -1057,6 +1075,10 @@ public:
     void set_autofit_x(bool v) { m_autofit_x = v; }
     bool autofit_y() const { return m_autofit_y; }
     void set_autofit_y(bool v) { m_autofit_y = v; }
+    LegendLocation legend_location() const { return m_legend_location; }
+    void set_legend_location(LegendLocation v) { m_legend_location = v; }
+    bool legend_outside() const { return m_legend_outside; }
+    void set_legend_outside(bool v) { m_legend_outside = v; }
 
     void set_x_limits(float lo, float hi) { m_x_min = lo; m_x_max = hi; m_has_x_limits = true; }
     void set_y_limits(float lo, float hi) { m_y_min = lo; m_y_max = hi; m_has_y_limits = true; }
@@ -1156,6 +1178,15 @@ public:
                 m_y_label.empty() ? nullptr : m_y_label.c_str(),
                 x_flags, y_flags
             );
+            {
+                // Convert our enum (kept ABI-compatible with ImPlotLocation_)
+                // and toggle Outside via the legend flags.
+                ImPlotLocation loc = static_cast<ImPlotLocation>(m_legend_location);
+                ImPlotLegendFlags lf = m_legend_outside
+                    ? ImPlotLegendFlags_Outside
+                    : 0;
+                ImPlot::SetupLegend(loc, lf);
+            }
             if (m_has_x_limits)
                 ImPlot::SetupAxisLimits(ImAxis_X1, m_x_min, m_x_max, ImPlotCond_Always);
             if (m_has_y_limits)
@@ -1220,6 +1251,8 @@ private:
     bool m_has_y_limits{false};
     float m_x_min{0.f}, m_x_max{0.f};
     float m_y_min{0.f}, m_y_max{0.f};
+    LegendLocation m_legend_location{LegendLocation::north_west};
+    bool m_legend_outside{false};
     std::map<std::string, Series> m_series;
     std::vector<std::string> m_series_order;
     // Bar-groups overlay (PlotBarGroups). Stored separately from m_series
