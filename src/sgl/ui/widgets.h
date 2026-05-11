@@ -161,17 +161,22 @@ public:
         Widget* parent,
         std::string_view title = "",
         float2 position = float2(10.f, 10.f),
-        float2 size = float2(400.f, 400.f)
+        float2 size = float2(400.f, 400.f),
+        bool show_title_bar = true
     )
         : Widget(parent)
         , m_title(title)
         , m_position(position)
         , m_size(size)
+        , m_show_title_bar(show_title_bar)
     {
     }
 
     const std::string& title() const { return m_title; }
     void set_title(std::string_view title) { m_title = title; }
+
+    bool show_title_bar() const { return m_show_title_bar; }
+    void set_show_title_bar(bool show) { m_show_title_bar = show; }
 
     float2 position() const { return m_position; }
     void set_position(const float2& position)
@@ -217,8 +222,12 @@ public:
             m_set_dock_id = false;
         }
 
+        ImGuiWindowFlags flags = 0;
+        if (!m_show_title_bar)
+            flags |= ImGuiWindowFlags_NoTitleBar;
+
         ScopedID id(this);
-        if (ImGui::Begin(m_title.c_str(), &m_visible)) {
+        if (ImGui::Begin(m_title.c_str(), &m_visible, flags)) {
             auto pos = ImGui::GetWindowPos();
             m_position = float2(pos.x, pos.y);
             auto size = ImGui::GetWindowSize();
@@ -239,6 +248,7 @@ private:
     bool m_set_size{true};
     uint32_t m_dock_id{0};
     bool m_set_dock_id{false};
+    bool m_show_title_bar{true};
 };
 
 class Group : public Widget {

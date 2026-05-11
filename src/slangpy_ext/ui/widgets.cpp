@@ -177,11 +177,12 @@ SGL_PY_EXPORT(ui_widgets)
 
     nb::class_<ui::Window, Widget>(ui, "Window", D(Window))
         .def(
-            nb::init<Widget*, std::string_view, float2, float2>(),
+            nb::init<Widget*, std::string_view, float2, float2, bool>(),
             "parent"_a.none(),
             "title"_a = "",
             "position"_a = float2(10.f, 10.f),
             "size"_a = float2(400.f, 400.f),
+            "show_title_bar"_a = true,
             D(Window, Window)
         )
         .def("show", &ui::Window::show, D(Window, show))
@@ -189,7 +190,8 @@ SGL_PY_EXPORT(ui_widgets)
         .def_prop_rw("title", &ui::Window::title, &ui::Window::set_title, D(Window, title))
         .def_prop_rw("position", &ui::Window::position, &ui::Window::set_position, D(Window, position))
         .def_prop_rw("size", &ui::Window::size, &ui::Window::set_size, D(Window, size))
-        .def_prop_rw("dock_id", &ui::Window::dock_id, &ui::Window::set_dock_id);
+        .def_prop_rw("dock_id", &ui::Window::dock_id, &ui::Window::set_dock_id)
+        .def_prop_rw("show_title_bar", &ui::Window::show_title_bar, &ui::Window::set_show_title_bar);
 
     nb::class_<Group, Widget>(ui, "Group")
         .def(nb::init<Widget*, std::string_view>(), "parent"_a.none(), "label"_a = "", D(Group, Group))
