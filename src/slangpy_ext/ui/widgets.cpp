@@ -422,6 +422,10 @@ SGL_PY_EXPORT(ui_widgets)
         .def("set_y_limits", &Plot::set_y_limits, "lo"_a, "hi"_a)
         .def("clear_limits", &Plot::clear_limits)
         .def("add_line", &Plot::add_line, "name"_a, "values"_a)
+        .def("add_histogram", &Plot::add_histogram,
+             "name"_a, "values"_a, "bins"_a = -1, "bar_scale"_a = 1.0,
+             "Add or replace a histogram series. bins=-1 uses ImPlotBin_Sturges "
+             "(auto); a positive integer is taken literally.")
         .def("push_to_line", &Plot::push_to_line, "name"_a, "value"_a, "max_history"_a = 0)
         .def("clear", &Plot::clear);
 

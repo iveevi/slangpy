@@ -1062,26 +1062,58 @@ public:
     void set_y_limits(float lo, float hi) { m_y_min = lo; m_y_max = hi; m_has_y_limits = true; }
     void clear_limits() { m_has_x_limits = m_has_y_limits = false; }
 
+    /// Per-series storage. Each series is either a line plot (ImPlot::PlotLine)
+    /// or a histogram (ImPlot::PlotHistogram). The histogram-only fields are
+    /// ignored for line series. `bins == -1` maps to ImPlotBin_Sturges
+    /// (auto-binning); a positive integer is taken literally.
+    enum class SeriesKind { line, histogram };
+    struct Series {
+        SeriesKind kind{SeriesKind::line};
+        std::vector<float> values;
+        int bins{-1};         // -1 -> ImPlotBin_Sturges
+        double bar_scale{1.0};
+    };
+
     /// Set or update a named line series. Stored by name; calling again
-    /// with the same name replaces the values.
+    /// with the same name replaces the values (and resets it to a line).
     void add_line(std::string_view name, std::vector<float> values)
     {
         std::string n(name);
-        m_series[n] = std::move(values);
+        Series& s = m_series[n];
+        s.kind = SeriesKind::line;
+        s.values = std::move(values);
+        if (std::find(m_series_order.begin(), m_series_order.end(), n) == m_series_order.end())
+            m_series_order.push_back(n);
+    }
+
+    /// Set or update a named histogram series. Raw samples are passed in
+    /// `values`; ImPlot bins them on render. `bins == -1` uses
+    /// ImPlotBin_Sturges (auto). `bar_scale` widens or narrows the bars
+    /// (1.0 = full bin width).
+    void add_histogram(std::string_view name, std::vector<float> values,
+                       int bins = -1, double bar_scale = 1.0)
+    {
+        std::string n(name);
+        Series& s = m_series[n];
+        s.kind = SeriesKind::histogram;
+        s.values = std::move(values);
+        s.bins = bins;
+        s.bar_scale = bar_scale;
         if (std::find(m_series_order.begin(), m_series_order.end(), n) == m_series_order.end())
             m_series_order.push_back(n);
     }
 
     /// Append a single sample to an existing series (rolls the buffer).
+    /// Works for both line and histogram series.
     void push_to_line(std::string_view name, float value, size_t max_history = 0)
     {
         std::string n(name);
-        auto& v = m_series[n];
+        Series& s = m_series[n];
         if (std::find(m_series_order.begin(), m_series_order.end(), n) == m_series_order.end())
             m_series_order.push_back(n);
-        v.push_back(value);
-        if (max_history > 0 && v.size() > max_history)
-            v.erase(v.begin(), v.end() - max_history);
+        s.values.push_back(value);
+        if (max_history > 0 && s.values.size() > max_history)
+            s.values.erase(s.values.begin(), s.values.end() - max_history);
     }
 
     void clear() { m_series.clear(); m_series_order.clear(); }
@@ -1104,9 +1136,18 @@ public:
             if (m_has_y_limits)
                 ImPlot::SetupAxisLimits(ImAxis_Y1, m_y_min, m_y_max, ImPlotCond_Always);
             for (const auto& name : m_series_order) {
-                const auto& vals = m_series.at(name);
-                if (!vals.empty())
-                    ImPlot::PlotLine(name.c_str(), vals.data(), static_cast<int>(vals.size()));
+                const Series& s = m_series.at(name);
+                if (s.values.empty()) continue;
+                if (s.kind == SeriesKind::line) {
+                    ImPlot::PlotLine(name.c_str(), s.values.data(),
+                                     static_cast<int>(s.values.size()));
+                } else {
+                    // bins: -1 == ImPlotBin_Sturges; positive -> literal count.
+                    int bins = (s.bins < 0) ? ImPlotBin_Sturges : s.bins;
+                    ImPlot::PlotHistogram(name.c_str(), s.values.data(),
+                                          static_cast<int>(s.values.size()),
+                                          bins, s.bar_scale);
+                }
             }
             ImPlot::EndPlot();
         }
@@ -1123,7 +1164,7 @@ private:
     bool m_has_y_limits{false};
     float m_x_min{0.f}, m_x_max{0.f};
     float m_y_min{0.f}, m_y_max{0.f};
-    std::map<std::string, std::vector<float>> m_series;
+    std::map<std::string, Series> m_series;
     std::vector<std::string> m_series_order;
 };
 
