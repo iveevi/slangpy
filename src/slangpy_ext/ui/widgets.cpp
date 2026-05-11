@@ -426,6 +426,15 @@ SGL_PY_EXPORT(ui_widgets)
              "name"_a, "values"_a, "bins"_a = -1, "bar_scale"_a = 1.0,
              "Add or replace a histogram series. bins=-1 uses ImPlotBin_Sturges "
              "(auto); a positive integer is taken literally.")
+        .def("add_bar_groups", &Plot::add_bar_groups,
+             "labels"_a, "values_per_label"_a,
+             "group_size"_a = 0.67, "stacked"_a = false,
+             "Set the bar-groups overlay (ImPlot::PlotBarGroups). `labels` "
+             "names each series; `values_per_label[i]` is the per-group "
+             "values for series i. All inner lists should be the same length "
+             "(= group count). When `stacked` is true, segments stack into "
+             "a single column per group; otherwise they sit side-by-side.")
+        .def("clear_bar_groups", &Plot::clear_bar_groups)
         .def("push_to_line", &Plot::push_to_line, "name"_a, "value"_a, "max_history"_a = 0)
         .def("clear", &Plot::clear);
 

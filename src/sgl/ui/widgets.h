@@ -1116,7 +1116,32 @@ public:
             s.values.erase(s.values.begin(), s.values.end() - max_history);
     }
 
-    void clear() { m_series.clear(); m_series_order.clear(); }
+    /// Set or replace the bar-groups overlay. Renders via
+    /// ImPlot::PlotBarGroups: one bar per group (x position) with `labels.size()`
+    /// segments per bar. If `stacked` is true segments stack to a column,
+    /// otherwise they sit side-by-side. `values_per_label[i]` is the series for
+    /// label `i`, indexed by group.
+    ///
+    /// All inner vectors must have the same length (= group count); shorter
+    /// ones are zero-padded on the fly at render time.
+    void add_bar_groups(std::vector<std::string> labels,
+                        std::vector<std::vector<float>> values_per_label,
+                        double group_size = 0.67, bool stacked = false)
+    {
+        m_bar_groups_labels = std::move(labels);
+        m_bar_groups_values = std::move(values_per_label);
+        m_bar_groups_group_size = group_size;
+        m_bar_groups_stacked = stacked;
+        m_has_bar_groups = true;
+    }
+
+    void clear_bar_groups() { m_has_bar_groups = false; }
+
+    void clear() {
+        m_series.clear();
+        m_series_order.clear();
+        m_has_bar_groups = false;
+    }
 
     virtual void render() override
     {
@@ -1149,6 +1174,37 @@ public:
                                           bins, s.bar_scale);
                 }
             }
+            // Bar-groups overlay (PlotBarGroups). Useful for showing a
+            // per-component breakdown across groups -- e.g., stacked
+            // average frame-phase timings across N consecutive blocks.
+            if (m_has_bar_groups && !m_bar_groups_labels.empty()) {
+                int item_count = static_cast<int>(m_bar_groups_labels.size());
+                int group_count = 0;
+                for (const auto& v : m_bar_groups_values)
+                    group_count = std::max(group_count, static_cast<int>(v.size()));
+                if (group_count > 0) {
+                    // Flatten item-major into (item_count * group_count).
+                    // Pad with zero for ragged series.
+                    std::vector<float> flat(static_cast<size_t>(item_count) * group_count, 0.f);
+                    for (int i = 0; i < item_count; ++i) {
+                        const auto& src = m_bar_groups_values[i];
+                        int n = std::min(group_count, static_cast<int>(src.size()));
+                        for (int g = 0; g < n; ++g)
+                            flat[static_cast<size_t>(i) * group_count + g] = src[g];
+                    }
+                    std::vector<const char*> label_ptrs(item_count);
+                    for (int i = 0; i < item_count; ++i)
+                        label_ptrs[i] = m_bar_groups_labels[i].c_str();
+                    ImPlotBarGroupsFlags flags = m_bar_groups_stacked
+                        ? ImPlotBarGroupsFlags_Stacked
+                        : 0;
+                    ImPlot::PlotBarGroups(
+                        label_ptrs.data(), flat.data(),
+                        item_count, group_count,
+                        m_bar_groups_group_size, /*shift*/ 0.0, flags
+                    );
+                }
+            }
             ImPlot::EndPlot();
         }
     }
@@ -1166,6 +1222,13 @@ private:
     float m_y_min{0.f}, m_y_max{0.f};
     std::map<std::string, Series> m_series;
     std::vector<std::string> m_series_order;
+    // Bar-groups overlay (PlotBarGroups). Stored separately from m_series
+    // because it's a multi-series block, not a single named series.
+    bool m_has_bar_groups{false};
+    std::vector<std::string> m_bar_groups_labels;
+    std::vector<std::vector<float>> m_bar_groups_values;
+    double m_bar_groups_group_size{0.67};
+    bool m_bar_groups_stacked{false};
 };
 
 /// Line plot of an in-memory float buffer (uses ImGui::PlotLines).
