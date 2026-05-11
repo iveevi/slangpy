@@ -18,8 +18,165 @@ struct ImGuiContext;
 struct ImDrawData;
 struct ImFont;
 struct ImTextureData;
+struct ImGuiStyle;
 
 namespace sgl::ui {
+
+/// Mirror of ImGui's color slot enum. Kept here so callers can refer to
+/// `ui::Col::WindowBg` instead of `ImGuiCol_WindowBg`. Stays integer-
+/// compatible with ImGui's own enum, so the C++ side passes them through.
+enum class Col : int {
+    text,
+    text_disabled,
+    window_bg,
+    child_bg,
+    popup_bg,
+    border,
+    border_shadow,
+    frame_bg,
+    frame_bg_hovered,
+    frame_bg_active,
+    title_bg,
+    title_bg_active,
+    title_bg_collapsed,
+    menu_bar_bg,
+    scrollbar_bg,
+    scrollbar_grab,
+    scrollbar_grab_hovered,
+    scrollbar_grab_active,
+    check_mark,
+    slider_grab,
+    slider_grab_active,
+    button,
+    button_hovered,
+    button_active,
+    header,
+    header_hovered,
+    header_active,
+    separator,
+    separator_hovered,
+    separator_active,
+    resize_grip,
+    resize_grip_hovered,
+    resize_grip_active,
+    input_text_cursor,
+    tab_hovered,
+    tab,
+    tab_selected,
+    tab_selected_overline,
+    tab_dimmed,
+    tab_dimmed_selected,
+    tab_dimmed_selected_overline,
+    docking_preview,
+    docking_empty_bg,
+    plot_lines,
+    plot_lines_hovered,
+    plot_histogram,
+    plot_histogram_hovered,
+    table_header_bg,
+    table_border_strong,
+    table_border_light,
+    table_row_bg,
+    table_row_bg_alt,
+    text_link,
+    text_selected_bg,
+    tree_lines,
+    drag_drop_target,
+    drag_drop_target_bg,
+    unsaved_marker,
+    nav_cursor,
+    nav_windowing_highlight,
+    nav_windowing_dim_bg,
+    modal_window_dim_bg,
+};
+
+/// Live wrapper around the active ImGui context's `ImGuiStyle`. All
+/// accessors read/write directly into ImGui's own struct, so mutations
+/// take effect on the next frame.
+///
+/// Field naming mirrors ImGui's `ImGuiStyle` in snake_case (e.g.
+/// `WindowPadding` -> `window_padding`, `FrameRounding` ->
+/// `frame_rounding`). Colors are accessed via `get_color(Col)` /
+/// `set_color(Col, float4)`.
+class SGL_API Style : public Object {
+    SGL_OBJECT(Style)
+public:
+    explicit Style(ImGuiContext* imgui_context);
+
+    /// Apply ImGui's built-in dark theme.
+    void colors_dark();
+    /// Apply ImGui's built-in light theme.
+    void colors_light();
+    /// Apply ImGui's built-in classic theme.
+    void colors_classic();
+
+    /// Read a single color slot. Returns an RGBA float4 in [0, 1].
+    float4 get_color(Col c) const;
+    /// Write a single color slot. RGBA float4 in [0, 1].
+    void set_color(Col c, float4 value);
+
+    // Scalar / vector accessors -- one pair per ImGuiStyle field.
+    // Implementations are in ui.cpp to keep imgui.h out of headers.
+    #define SGL_UI_STYLE_FLOAT(name) \
+        float name() const;          \
+        void set_##name(float v);
+    #define SGL_UI_STYLE_VEC2(name)  \
+        float2 name() const;         \
+        void set_##name(float2 v);
+    #define SGL_UI_STYLE_BOOL(name)  \
+        bool name() const;           \
+        void set_##name(bool v);
+
+    SGL_UI_STYLE_FLOAT(alpha)
+    SGL_UI_STYLE_FLOAT(disabled_alpha)
+    SGL_UI_STYLE_VEC2(window_padding)
+    SGL_UI_STYLE_FLOAT(window_rounding)
+    SGL_UI_STYLE_FLOAT(window_border_size)
+    SGL_UI_STYLE_VEC2(window_min_size)
+    SGL_UI_STYLE_VEC2(window_title_align)
+    SGL_UI_STYLE_FLOAT(child_rounding)
+    SGL_UI_STYLE_FLOAT(child_border_size)
+    SGL_UI_STYLE_FLOAT(popup_rounding)
+    SGL_UI_STYLE_FLOAT(popup_border_size)
+    SGL_UI_STYLE_VEC2(frame_padding)
+    SGL_UI_STYLE_FLOAT(frame_rounding)
+    SGL_UI_STYLE_FLOAT(frame_border_size)
+    SGL_UI_STYLE_VEC2(item_spacing)
+    SGL_UI_STYLE_VEC2(item_inner_spacing)
+    SGL_UI_STYLE_VEC2(cell_padding)
+    SGL_UI_STYLE_VEC2(touch_extra_padding)
+    SGL_UI_STYLE_FLOAT(indent_spacing)
+    SGL_UI_STYLE_FLOAT(columns_min_spacing)
+    SGL_UI_STYLE_FLOAT(scrollbar_size)
+    SGL_UI_STYLE_FLOAT(scrollbar_rounding)
+    SGL_UI_STYLE_FLOAT(grab_min_size)
+    SGL_UI_STYLE_FLOAT(grab_rounding)
+    SGL_UI_STYLE_FLOAT(log_slider_deadzone)
+    SGL_UI_STYLE_FLOAT(tab_rounding)
+    SGL_UI_STYLE_FLOAT(tab_border_size)
+    SGL_UI_STYLE_FLOAT(tab_bar_border_size)
+    SGL_UI_STYLE_FLOAT(tab_bar_overline_size)
+    SGL_UI_STYLE_FLOAT(separator_text_border_size)
+    SGL_UI_STYLE_VEC2(separator_text_align)
+    SGL_UI_STYLE_VEC2(separator_text_padding)
+    SGL_UI_STYLE_VEC2(button_text_align)
+    SGL_UI_STYLE_VEC2(selectable_text_align)
+    SGL_UI_STYLE_FLOAT(docking_separator_size)
+    SGL_UI_STYLE_FLOAT(mouse_cursor_scale)
+    SGL_UI_STYLE_BOOL(anti_aliased_lines)
+    SGL_UI_STYLE_BOOL(anti_aliased_lines_use_tex)
+    SGL_UI_STYLE_BOOL(anti_aliased_fill)
+    SGL_UI_STYLE_FLOAT(curve_tessellation_tol)
+    SGL_UI_STYLE_FLOAT(circle_tessellation_max_error)
+
+    #undef SGL_UI_STYLE_FLOAT
+    #undef SGL_UI_STYLE_VEC2
+    #undef SGL_UI_STYLE_BOOL
+
+private:
+    ImGuiContext* m_imgui_context;
+    ImGuiStyle& imgui_style() const;
+};
 
 class SGL_API Context : public Object {
     SGL_OBJECT(Context)
@@ -29,6 +186,10 @@ public:
 
     /// The main screen widget.
     ref<Screen> screen() const { return m_screen; }
+
+    /// Live wrapper around the active ImGui style. Mutations take
+    /// effect on the next frame.
+    ref<Style> style() const { return m_style; }
 
     ImFont* get_font(const char* name);
 
@@ -105,6 +266,7 @@ private:
     ref<ShaderProgram> m_program;
     ref<InputLayout> m_input_layout;
 
+    ref<Style> m_style;
     std::map<std::string, ImFont*> m_fonts;
     std::map<ImTextureData*, ref<Texture>> m_textures;
 

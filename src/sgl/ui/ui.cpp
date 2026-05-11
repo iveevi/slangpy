@@ -33,6 +33,122 @@ CMRC_DECLARE(sgl_data);
 
 namespace sgl::ui {
 
+// ---------------------------------------------------------------------------
+// Style: live wrapper around the active ImGui context's ImGuiStyle struct.
+// ---------------------------------------------------------------------------
+
+Style::Style(ImGuiContext* imgui_context)
+    : m_imgui_context(imgui_context)
+{
+}
+
+ImGuiStyle& Style::imgui_style() const
+{
+    ImGui::SetCurrentContext(m_imgui_context);
+    return ImGui::GetStyle();
+}
+
+void Style::colors_dark()
+{
+    ImGui::SetCurrentContext(m_imgui_context);
+    ImGui::StyleColorsDark();
+}
+void Style::colors_light()
+{
+    ImGui::SetCurrentContext(m_imgui_context);
+    ImGui::StyleColorsLight();
+}
+void Style::colors_classic()
+{
+    ImGui::SetCurrentContext(m_imgui_context);
+    ImGui::StyleColorsClassic();
+}
+
+float4 Style::get_color(Col c) const
+{
+    int idx = static_cast<int>(c);
+    SGL_CHECK(idx >= 0 && idx < ImGuiCol_COUNT, "Style::get_color: invalid Col index {}", idx);
+    const ImVec4& v = imgui_style().Colors[idx];
+    return float4(v.x, v.y, v.z, v.w);
+}
+
+void Style::set_color(Col c, float4 v)
+{
+    int idx = static_cast<int>(c);
+    SGL_CHECK(idx >= 0 && idx < ImGuiCol_COUNT, "Style::set_color: invalid Col index {}", idx);
+    imgui_style().Colors[idx] = ImVec4(v.x, v.y, v.z, v.w);
+}
+
+// Scalar field accessors -- each one is one read or one write of an
+// ImGuiStyle field. Field name on the ImGui side is the camelCase form
+// of the snake_case method name (e.g. window_padding -> WindowPadding).
+#define SGL_UI_STYLE_FLOAT_IMPL(name, ImGuiField)                                \
+    float Style::name() const { return imgui_style().ImGuiField; }               \
+    void Style::set_##name(float v) { imgui_style().ImGuiField = v; }
+
+#define SGL_UI_STYLE_VEC2_IMPL(name, ImGuiField)                                 \
+    float2 Style::name() const                                                   \
+    {                                                                            \
+        const ImVec2& v = imgui_style().ImGuiField;                              \
+        return float2(v.x, v.y);                                                 \
+    }                                                                            \
+    void Style::set_##name(float2 v) { imgui_style().ImGuiField = ImVec2(v.x, v.y); }
+
+#define SGL_UI_STYLE_BOOL_IMPL(name, ImGuiField)                                 \
+    bool Style::name() const { return imgui_style().ImGuiField; }                \
+    void Style::set_##name(bool v) { imgui_style().ImGuiField = v; }
+
+SGL_UI_STYLE_FLOAT_IMPL(alpha, Alpha)
+SGL_UI_STYLE_FLOAT_IMPL(disabled_alpha, DisabledAlpha)
+SGL_UI_STYLE_VEC2_IMPL(window_padding, WindowPadding)
+SGL_UI_STYLE_FLOAT_IMPL(window_rounding, WindowRounding)
+SGL_UI_STYLE_FLOAT_IMPL(window_border_size, WindowBorderSize)
+SGL_UI_STYLE_VEC2_IMPL(window_min_size, WindowMinSize)
+SGL_UI_STYLE_VEC2_IMPL(window_title_align, WindowTitleAlign)
+SGL_UI_STYLE_FLOAT_IMPL(child_rounding, ChildRounding)
+SGL_UI_STYLE_FLOAT_IMPL(child_border_size, ChildBorderSize)
+SGL_UI_STYLE_FLOAT_IMPL(popup_rounding, PopupRounding)
+SGL_UI_STYLE_FLOAT_IMPL(popup_border_size, PopupBorderSize)
+SGL_UI_STYLE_VEC2_IMPL(frame_padding, FramePadding)
+SGL_UI_STYLE_FLOAT_IMPL(frame_rounding, FrameRounding)
+SGL_UI_STYLE_FLOAT_IMPL(frame_border_size, FrameBorderSize)
+SGL_UI_STYLE_VEC2_IMPL(item_spacing, ItemSpacing)
+SGL_UI_STYLE_VEC2_IMPL(item_inner_spacing, ItemInnerSpacing)
+SGL_UI_STYLE_VEC2_IMPL(cell_padding, CellPadding)
+SGL_UI_STYLE_VEC2_IMPL(touch_extra_padding, TouchExtraPadding)
+SGL_UI_STYLE_FLOAT_IMPL(indent_spacing, IndentSpacing)
+SGL_UI_STYLE_FLOAT_IMPL(columns_min_spacing, ColumnsMinSpacing)
+SGL_UI_STYLE_FLOAT_IMPL(scrollbar_size, ScrollbarSize)
+SGL_UI_STYLE_FLOAT_IMPL(scrollbar_rounding, ScrollbarRounding)
+SGL_UI_STYLE_FLOAT_IMPL(grab_min_size, GrabMinSize)
+SGL_UI_STYLE_FLOAT_IMPL(grab_rounding, GrabRounding)
+SGL_UI_STYLE_FLOAT_IMPL(log_slider_deadzone, LogSliderDeadzone)
+SGL_UI_STYLE_FLOAT_IMPL(tab_rounding, TabRounding)
+SGL_UI_STYLE_FLOAT_IMPL(tab_border_size, TabBorderSize)
+SGL_UI_STYLE_FLOAT_IMPL(tab_bar_border_size, TabBarBorderSize)
+SGL_UI_STYLE_FLOAT_IMPL(tab_bar_overline_size, TabBarOverlineSize)
+SGL_UI_STYLE_FLOAT_IMPL(separator_text_border_size, SeparatorTextBorderSize)
+SGL_UI_STYLE_VEC2_IMPL(separator_text_align, SeparatorTextAlign)
+SGL_UI_STYLE_VEC2_IMPL(separator_text_padding, SeparatorTextPadding)
+SGL_UI_STYLE_VEC2_IMPL(button_text_align, ButtonTextAlign)
+SGL_UI_STYLE_VEC2_IMPL(selectable_text_align, SelectableTextAlign)
+SGL_UI_STYLE_FLOAT_IMPL(docking_separator_size, DockingSeparatorSize)
+SGL_UI_STYLE_FLOAT_IMPL(mouse_cursor_scale, MouseCursorScale)
+SGL_UI_STYLE_BOOL_IMPL(anti_aliased_lines, AntiAliasedLines)
+SGL_UI_STYLE_BOOL_IMPL(anti_aliased_lines_use_tex, AntiAliasedLinesUseTex)
+SGL_UI_STYLE_BOOL_IMPL(anti_aliased_fill, AntiAliasedFill)
+SGL_UI_STYLE_FLOAT_IMPL(curve_tessellation_tol, CurveTessellationTol)
+SGL_UI_STYLE_FLOAT_IMPL(circle_tessellation_max_error, CircleTessellationMaxError)
+
+#undef SGL_UI_STYLE_FLOAT_IMPL
+#undef SGL_UI_STYLE_VEC2_IMPL
+#undef SGL_UI_STYLE_BOOL_IMPL
+
+// ---------------------------------------------------------------------------
+// Default theme: applied once at Context construction. Same look as before
+// the Style class existed; users override via ctx.style after construction.
+// ---------------------------------------------------------------------------
+
 static void setup_style()
 {
     ImGuiStyle& style = ImGui::GetStyle();
@@ -285,6 +401,7 @@ Context::Context(ref<Device> device)
     ImPlot::CreateContext();
 
     m_screen = ref<Screen>(new Screen());
+    m_style = ref<Style>(new Style(m_imgui_context));
 
     ImGuiIO& io = ImGui::GetIO();
     io.UserData = this;
