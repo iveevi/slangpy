@@ -223,8 +223,21 @@ public:
         }
 
         ImGuiWindowFlags flags = 0;
-        if (!m_show_title_bar)
+        if (!m_show_title_bar) {
             flags |= ImGuiWindowFlags_NoTitleBar;
+            // NoTitleBar only suppresses the *floating* title bar; once
+            // the window is docked, ImGui still draws a tab strip in the
+            // dock node. The WindowClass override below propagates the
+            // intent into the node's MergedFlags; we *also* poke
+            // LocalFlags directly post-Begin() because the WindowClass
+            // path only takes effect on the frame after Begin() and is
+            // not persisted to imgui.ini, so the first frame after a
+            // fresh layout still shows a tab strip.
+            ImGuiWindowClass window_class;
+            window_class.DockNodeFlagsOverrideSet
+                = ImGuiDockNodeFlags_NoTabBar | ImGuiDockNodeFlags_NoDockingOverMe;
+            ImGui::SetNextWindowClass(&window_class);
+        }
 
         ScopedID id(this);
         if (ImGui::Begin(m_title.c_str(), &m_visible, flags)) {
@@ -232,6 +245,18 @@ public:
             m_position = float2(pos.x, pos.y);
             auto size = ImGui::GetWindowSize();
             m_size = float2(size.x, size.y);
+
+            // Force-hide the dock-node tab strip for chrome-less windows.
+            // Mutating LocalFlags directly is what DockBuilder does; it's
+            // persisted via imgui.ini so the fix sticks across restarts.
+            if (!m_show_title_bar) {
+                if (ImGuiDockNode* node = ImGui::GetWindowDockNode()) {
+                    node->LocalFlags |= ImGuiDockNodeFlags_NoTabBar
+                                      | ImGuiDockNodeFlags_NoDockingSplit
+                                      | ImGuiDockNodeFlags_NoCloseButton;
+                    node->WantHiddenTabBarUpdate = true;
+                }
+            }
 
             ImGui::PushItemWidth(300);
             Widget::render();
