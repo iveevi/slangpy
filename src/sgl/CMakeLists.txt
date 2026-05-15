@@ -196,7 +196,7 @@ target_compile_definitions(sgl PUBLIC IM_OFFSETOF=offsetof)
 set_source_files_properties(
     ${SGL_IMPLOT_DIR}/implot.cpp
     ${SGL_IMPLOT_DIR}/implot_items.cpp
-    PROPERTIES COMPILE_FLAGS "-fvisibility=default"
+    PROPERTIES COMPILE_FLAGS "-fvisibility=default -Wno-deprecated-enum-enum-conversion"
 )
 
 # Add macOS Objective-C++ source and find dependencies (only on macOS)

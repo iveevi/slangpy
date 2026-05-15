@@ -209,6 +209,14 @@ public:
         if (!m_visible)
             return;
 
+        // Constructor-provided position/size apply only the first time
+        // a window with this title is ever seen (i.e. no imgui.ini
+        // saved entry). On subsequent launches the layout persisted in
+        // imgui.ini wins. Explicit set_position / set_size calls below
+        // force-override regardless.
+        ImGui::SetNextWindowPos(ImVec2(m_position.x, m_position.y), ImGuiCond_FirstUseEver);
+        ImGui::SetNextWindowSize(ImVec2(m_size.x, m_size.y), ImGuiCond_FirstUseEver);
+
         if (m_set_position) {
             ImGui::SetNextWindowPos(ImVec2(m_position.x, m_position.y));
             m_set_position = false;
@@ -251,9 +259,12 @@ public:
             // persisted via imgui.ini so the fix sticks across restarts.
             if (!m_show_title_bar) {
                 if (ImGuiDockNode* node = ImGui::GetWindowDockNode()) {
-                    node->LocalFlags |= ImGuiDockNodeFlags_NoTabBar
-                                      | ImGuiDockNodeFlags_NoDockingSplit
-                                      | ImGuiDockNodeFlags_NoCloseButton;
+                    // Mixing the private (ImGuiDockNodeFlagsPrivate_) and
+                    // public (ImGuiDockNodeFlags_) enums triggers
+                    // -Wdeprecated-enum-enum-conversion; cast through int.
+                    node->LocalFlags |= (int)ImGuiDockNodeFlags_NoTabBar
+                                      | (int)ImGuiDockNodeFlags_NoDockingSplit
+                                      | (int)ImGuiDockNodeFlags_NoCloseButton;
                     node->WantHiddenTabBarUpdate = true;
                 }
             }
@@ -269,8 +280,8 @@ private:
     std::string m_title;
     float2 m_position;
     float2 m_size;
-    bool m_set_position{true};
-    bool m_set_size{true};
+    bool m_set_position{false};
+    bool m_set_size{false};
     uint32_t m_dock_id{0};
     bool m_set_dock_id{false};
     bool m_show_title_bar{true};

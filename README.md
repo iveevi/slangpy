@@ -1,71 +1,54 @@
-# SlangPy
+# SlangPy (iveevi fork)
 
 Fork of [shader-slang/slangpy](https://github.com/shader-slang/slangpy)
-that extends `spy.ui` for building real apps that display slangpy
-compute output through ImGui — dockable windows, the slangpy-rendered
-scene as an `Image` widget, real ImPlot-backed graphs, programmatic
-docking with horizontal/vertical splits, color pickers, and a font API.
-Everything outside `src/sgl/ui/` and `src/slangpy_ext/ui/` matches
-upstream.
+that extends `spy.ui` for building real apps around slangpy compute
+output through ImGui — dockable windows, the slangpy-rendered scene as
+an `Image` widget, real ImPlot-backed graphs, programmatic docking
+with horizontal/vertical splits, fonts, a live `ImGuiStyle` view, layout
+persistence, color pickers and separators. Everything outside
+`src/sgl/ui/`, `src/slangpy_ext/ui/`, the `decorated`/`ui_context` flag
+additions, and the ImPlot fetch in `external/CMakeLists.txt` matches
+upstream verbatim.
 
-## What's added
+## Documentation
 
-### New widgets in `spy.ui`
+Per-feature reference for the fork lives in [`docs/fork/`](docs/fork/):
 
-| Widget | What it wraps |
+| Page | Covers |
 |---|---|
-| `ui.Image(parent, texture, size, uv0, uv1)` | `ImGui::Image()` — takes a `sgl.Texture` directly (`ImTextureID` is already typedef'd to `sgl::Texture*` in `imgui_config.h`), so you can display any compute-written texture in a docked window. |
-| `ui.Plot(parent, label, x_label, y_label, size, autofit_x, autofit_y)` | `ImPlot::BeginPlot/SetupAxes/PlotLine/EndPlot`. Methods: `add_line(name, values)`, `push_to_line(name, value, max_history)`, `set_x_limits/set_y_limits`. Real axes, ticks, legend, grid. |
-| `ui.PlotLines(parent, label, values, overlay, scale_min, scale_max, size)` | Lightweight `ImGui::PlotLines` wrapper for sparkline-style plots without the ImPlot dependency. |
-| `ui.Separator(parent, label)` | `ImGui::Separator()` (no label) / `ImGui::SeparatorText(label)`. |
-| `ui.ColorEdit3 / ColorEdit4 / ColorPicker3 / ColorPicker4` | `ImGui::ColorEdit3/4` and `ImGui::ColorPicker3/4` on `float3`/`float4` `ValueProperty`s. |
-| `ui.DockSpace(parent)` | `ImGui::DockSpaceOverViewport` with optional `passthru_central_node` (transparent central pane so the surface shows through). Exposes `request_split_horizontal(ratio)` / `request_split_vertical(ratio)` plus `dock_id` / `left_dock_id` / `right_dock_id` for programmatic docking without dragging. |
-| `ui.Window.dock_id` | Setter that calls `ImGui::SetNextWindowDockID` on the next render — the missing piece for first-launch dock layouts. |
+| [`fork/index.rst`](docs/fork/index.rst) | Overview, motivation, summary table |
+| [`fork/widgets.rst`](docs/fork/widgets.rst) | `Image`, `Plot`, `PlotLines`, `Separator`, `ColorEdit/Picker`, `DockSpace`, `Window` |
+| [`fork/plotting.rst`](docs/fork/plotting.rst) | `Plot` deep-dive: line / histogram / bar groups, legend, axes |
+| [`fork/context.rst`](docs/fork/context.rst) | Font API, `Style` + `Col`, `AppWindow.ui_context`, `imgui.ini` |
+| [`fork/window.rst`](docs/fork/window.rst) | `decorated` / `show_title_bar` / `dock_id`, layout persistence |
+| [`fork/internals.rst`](docs/fork/internals.rst) | ImPlot fetch + patches, `end_frame` rendering fixes |
 
-### `ui.Context` API
+The upstream Sphinx docs build cleanly with the fork pages mounted:
 
-- `add_font(name, path, size, is_default=False)` — load a TTF from disk
-  and register it under `name`.
-- `push_font(name)` / `pop_font()` — `ImGui::PushFont/PopFont` on a
-  registered font.
-- ImPlot context is created/destroyed alongside ImGui's.
-- `io.IniFilename = "imgui.ini"` (was `nullptr`) so the dockspace layout
-  persists across runs.
+```bash
+sphinx-build -b html docs docs/_build/html
+```
 
-### `AppWindow.ui_context`
+## Example
 
-Read-only property exposing the `ui::Context` that `AppWindow` owns, so
-you can call `add_font` / `push_font` on it after construction.
+See [`examples/fork_demo/`](examples/fork_demo/) — a single program
+exercising essentially every fork feature in one app: a progressive SDF
+path tracer rendered into a dockable `ui.Image` viewport, with an
+orbit-camera (mouse drag), per-light intensity sliders, exposure /
+render-scale controls, scene material editing, a Nord-themed live
+`Style`, custom fonts, and persistent layout via `imgui.ini`.
 
-### Build system
+```bash
+python examples/fork_demo/fork_demo.py
+```
 
-- `external/CMakeLists.txt` fetches **ImPlot 0.16** alongside ImGui.
-- ImPlot 0.16 references `IM_OFFSETOF`, `IM_FLOOR`, `ImFont::FontSize`,
-  and `ImFont::FindGlyph`, all of which were removed or moved in
-  ImGui 1.92. The fork patches `implot.cpp` post-fetch (`IM_FLOOR` →
-  `ImFloor`, `font->FindGlyph` → `font->GetFontBaked(g.FontSize)->FindGlyph`,
-  and the `g.FontSize / font->FontSize` scale degenerates to 1.0) and
-  defines `IM_OFFSETOF=offsetof` as a target compile definition.
-- ImPlot's TUs are compiled with `-fvisibility=default` so the binding
-  layer in `slangpy_ext` can link to its symbols out of `libsgl`.
+The README inside `examples/fork_demo/` enumerates which fork feature
+each part of the demo exercises and where in the code to look.
 
-### Rendering fixes (for `ui.Image` correctness)
+## Upstream
 
-`Context::end_frame` was tightened in two places to make `ImGui::Image`
-actually display foreign / compute-written textures on Vulkan:
-
-1. **Auto state-transition.** Before beginning the ImGui render pass,
-   `end_frame` walks the draw lists, collects every unique texture
-   pointer, and calls `command_encoder->set_texture_state(.., shader_resource)`.
-   Without this, slang-rhi's per-encoder state tracker doesn't insert
-   the UAV → SRV layout barrier for textures that were just written by
-   compute, and the sampler reads zero.
-2. **Per-cmd pipeline rebind.** The render loop binds the pipeline and
-   writes the uniforms (sampler / scale / offset / `is_srgb_format`)
-   *before each draw command*, not just once per pass. slang-rhi's
-   shader objects commit descriptor sets at pipeline-bind time, so
-   mid-pass `set_texture_view` modifications didn't reach the shader on
-   subsequent draws.
-
-Together these let you put a compute kernel's output texture in a
-dockable ImGui window via `ui.Image` and see the live contents.
+For the underlying API — `slangpy.Device`, the functional API
+(`module.fn(args)` → kernel), `Tensor`, `Buffer`, ray-tracing helpers,
+PyTorch integration, etc. — refer to the upstream documentation at
+[slangpy.shader-slang.org](https://slangpy.shader-slang.org/) and the
+upstream README. This fork doesn't change any of that.

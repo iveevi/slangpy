@@ -137,6 +137,13 @@ If you use SlangPy in a research project leading to a publication, please cite t
     src/developer_guide
 
 .. toctree::
+    :maxdepth: 2
+    :caption: Fork (iveevi/slangpy)
+    :hidden:
+
+    fork/index
+
+.. toctree::
     :maxdepth: 1
     :caption: Reference
     :hidden:

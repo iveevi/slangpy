@@ -37,6 +37,12 @@ Changelog = "https://slangpy.shader-slang.org/en/latest/changelog.html"
 [project.optional-dependencies]
 torch = ["slangpy-torch==0.7.0"]
 
+[tool.uv]
+# Treat slangpy as a non-package "virtual" project: don't try to build
+# or install it on `uv run` / `uv sync`. The native extension is built
+# out-of-band by cmake and exposed to the venv via .venv/lib/.../slangpy.pth.
+package = false
+
 [tool.setuptools]
 include-package-data = true
 
