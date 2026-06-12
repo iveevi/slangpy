@@ -55,6 +55,7 @@ target_sources(sgl PRIVATE
     core/plugin.h
     core/resolver.h
     core/short_vector.h
+    core/signature_buffer.h
     core/static_vector.h
     core/stream.h
     core/string.cpp
@@ -74,6 +75,7 @@ target_sources(sgl PRIVATE
     device/blit.slang
     device/buffer_cursor.cpp
     device/buffer_cursor.h
+    device/callback_list.h
     device/command.cpp
     device/command.h
     device/cuda_interop.cpp
@@ -149,10 +151,27 @@ target_sources(sgl PRIVATE
     math/vector_types.h
     math/vector.h
 
+    func/base_module.cpp
+    func/base_module.h
+    func/base_struct.cpp
+    func/base_struct.h
+    func/tensor.cpp
+    func/tensor.h
+
+    refl/layout.cpp
+    refl/layout.h
+    refl/lookup.cpp
+    refl/lookup.h
+    refl/function.cpp
+    refl/function.h
+    refl/type.cpp
+    refl/type.h
+
     stl/bit.h
 
     ui/fwd.h
     ui/imgui.slang
+    ui/imguisw.slang
     ui/ui.cpp
     ui/ui.h
     ui/widgets.cpp
