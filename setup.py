@@ -111,6 +111,14 @@ class CMakeBuild(build_ext):
                 "-DSGL_SLANG_DEBUG_INFO=OFF",
             ]
 
+        # Build hygiene under gcc 16: sgl's own -Werror trips on pyconfig.h's
+        # _POSIX_C_SOURCE / _XOPEN_SOURCE redefinition, so disable it; and
+        # external/slang-rhi's unconditional -Werror fires -Wfree-nonheap-object
+        # on the vendored ComBaseObject layout, so downgrade only that one.
+        cmake_args += ["-DSGL_WARNINGS_AS_ERRORS=OFF"]
+        if platform.system() == "Linux":
+            cmake_args += ["-DCMAKE_CXX_FLAGS=-Wno-error=free-nonheap-object"]
+
         # Adding CMake arguments set as environment variable
         if "CMAKE_ARGS" in os.environ:
             cmake_args += [item for item in os.environ["CMAKE_ARGS"].split(" ") if item]
