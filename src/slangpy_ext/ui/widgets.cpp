@@ -197,13 +197,17 @@ SGL_PY_EXPORT(ui_widgets)
         .def(nb::init<Widget*, std::string_view>(), "parent"_a.none(), "label"_a = "", D(Group, Group))
         .def_prop_rw("label", &Group::label, &Group::set_label, D(Group, label));
 
+    nb::class_<TreeNode, Widget>(ui, "TreeNode")
+        .def(nb::init<Widget*, std::string_view, bool>(), "parent"_a.none(), "label"_a = "", "open"_a = false)
+        .def_prop_rw("label", &TreeNode::label, &TreeNode::set_label)
+        .def_prop_rw("open", &TreeNode::open, &TreeNode::set_open);
+
     nb::class_<Text, Widget>(ui, "Text")
         .def(nb::init<Widget*, std::string_view>(), "parent"_a.none(), "text"_a = "", D(Text, Text))
         .def_prop_rw("text", &Text::text, &Text::set_text, D(Text, text));
 
     nb::class_<Separator, Widget>(ui, "Separator")
-        .def(nb::init<Widget*, std::string_view>(),
-             "parent"_a.none(), "label"_a = "")
+        .def(nb::init<Widget*, std::string_view>(), "parent"_a.none(), "label"_a = "")
         .def_prop_rw("label", &Separator::label, &Separator::set_label);
 
     nb::class_<ProgressBar, Widget>(ui, "ProgressBar", D(ProgressBar))
@@ -378,34 +382,42 @@ SGL_PY_EXPORT(ui_widgets)
     nb::class_<ColorEdit3, ValueProperty<float3>>(ui, "ColorEdit3")
         .def(
             nb::init<Widget*, std::string_view, float3, ColorEdit3::Callback>(),
-            "parent"_a.none(), "label"_a = "", "value"_a = float3(0.f),
+            "parent"_a.none(),
+            "label"_a = "",
+            "value"_a = float3(0.f),
             "callback"_a = ColorEdit3::Callback{}
         );
     nb::class_<ColorEdit4, ValueProperty<float4>>(ui, "ColorEdit4")
         .def(
             nb::init<Widget*, std::string_view, float4, ColorEdit4::Callback>(),
-            "parent"_a.none(), "label"_a = "", "value"_a = float4(0.f),
+            "parent"_a.none(),
+            "label"_a = "",
+            "value"_a = float4(0.f),
             "callback"_a = ColorEdit4::Callback{}
         );
     nb::class_<ColorPicker3, ValueProperty<float3>>(ui, "ColorPicker3")
         .def(
             nb::init<Widget*, std::string_view, float3, ColorPicker3::Callback>(),
-            "parent"_a.none(), "label"_a = "", "value"_a = float3(0.f),
+            "parent"_a.none(),
+            "label"_a = "",
+            "value"_a = float3(0.f),
             "callback"_a = ColorPicker3::Callback{}
         );
     nb::class_<ColorPicker4, ValueProperty<float4>>(ui, "ColorPicker4")
         .def(
             nb::init<Widget*, std::string_view, float4, ColorPicker4::Callback>(),
-            "parent"_a.none(), "label"_a = "", "value"_a = float4(0.f),
+            "parent"_a.none(),
+            "label"_a = "",
+            "value"_a = float4(0.f),
             "callback"_a = ColorPicker4::Callback{}
         );
 
     nb::enum_<LegendLocation>(ui, "LegendLocation")
-        .value("center",     LegendLocation::center)
-        .value("north",      LegendLocation::north)
-        .value("south",      LegendLocation::south)
-        .value("west",       LegendLocation::west)
-        .value("east",       LegendLocation::east)
+        .value("center", LegendLocation::center)
+        .value("north", LegendLocation::north)
+        .value("south", LegendLocation::south)
+        .value("west", LegendLocation::west)
+        .value("east", LegendLocation::east)
         .value("north_west", LegendLocation::north_west)
         .value("north_east", LegendLocation::north_east)
         .value("south_west", LegendLocation::south_west)
@@ -413,8 +425,17 @@ SGL_PY_EXPORT(ui_widgets)
 
     nb::class_<Plot, Widget>(ui, "Plot")
         .def(
-            nb::init<Widget*, std::string_view, std::string_view, std::string_view,
-                     float2, bool, bool, LegendLocation, bool, bool>(),
+            nb::init<
+                Widget*,
+                std::string_view,
+                std::string_view,
+                std::string_view,
+                float2,
+                bool,
+                bool,
+                LegendLocation,
+                bool,
+                bool>(),
             "parent"_a.none(),
             "label"_a = "plot",
             "x_label"_a = "",
@@ -432,28 +453,36 @@ SGL_PY_EXPORT(ui_widgets)
         .def_prop_rw("size", &Plot::size, &Plot::set_size)
         .def_prop_rw("autofit_x", &Plot::autofit_x, &Plot::set_autofit_x)
         .def_prop_rw("autofit_y", &Plot::autofit_y, &Plot::set_autofit_y)
-        .def_prop_rw("legend_location",
-                     &Plot::legend_location, &Plot::set_legend_location)
-        .def_prop_rw("legend_outside",
-                     &Plot::legend_outside, &Plot::set_legend_outside)
-        .def_prop_rw("legend_horizontal",
-                     &Plot::legend_horizontal, &Plot::set_legend_horizontal)
+        .def_prop_rw("legend_location", &Plot::legend_location, &Plot::set_legend_location)
+        .def_prop_rw("legend_outside", &Plot::legend_outside, &Plot::set_legend_outside)
+        .def_prop_rw("legend_horizontal", &Plot::legend_horizontal, &Plot::set_legend_horizontal)
         .def("set_x_limits", &Plot::set_x_limits, "lo"_a, "hi"_a)
         .def("set_y_limits", &Plot::set_y_limits, "lo"_a, "hi"_a)
         .def("clear_limits", &Plot::clear_limits)
         .def("add_line", &Plot::add_line, "name"_a, "values"_a)
-        .def("add_histogram", &Plot::add_histogram,
-             "name"_a, "values"_a, "bins"_a = -1, "bar_scale"_a = 1.0,
-             "Add or replace a histogram series. bins=-1 uses ImPlotBin_Sturges "
-             "(auto); a positive integer is taken literally.")
-        .def("add_bar_groups", &Plot::add_bar_groups,
-             "labels"_a, "values_per_label"_a,
-             "group_size"_a = 0.67, "stacked"_a = false,
-             "Set the bar-groups overlay (ImPlot::PlotBarGroups). `labels` "
-             "names each series; `values_per_label[i]` is the per-group "
-             "values for series i. All inner lists should be the same length "
-             "(= group count). When `stacked` is true, segments stack into "
-             "a single column per group; otherwise they sit side-by-side.")
+        .def(
+            "add_histogram",
+            &Plot::add_histogram,
+            "name"_a,
+            "values"_a,
+            "bins"_a = -1,
+            "bar_scale"_a = 1.0,
+            "Add or replace a histogram series. bins=-1 uses ImPlotBin_Sturges "
+            "(auto); a positive integer is taken literally."
+        )
+        .def(
+            "add_bar_groups",
+            &Plot::add_bar_groups,
+            "labels"_a,
+            "values_per_label"_a,
+            "group_size"_a = 0.67,
+            "stacked"_a = false,
+            "Set the bar-groups overlay (ImPlot::PlotBarGroups). `labels` "
+            "names each series; `values_per_label[i]` is the per-group "
+            "values for series i. All inner lists should be the same length "
+            "(= group count). When `stacked` is true, segments stack into "
+            "a single column per group; otherwise they sit side-by-side."
+        )
         .def("clear_bar_groups", &Plot::clear_bar_groups)
         .def("push_to_line", &Plot::push_to_line, "name"_a, "value"_a, "max_history"_a = 0)
         .def("clear", &Plot::clear);
@@ -465,7 +494,5 @@ SGL_PY_EXPORT(ui_widgets)
         .def_prop_ro("right_dock_id", &DockSpace::right_dock_id)
         .def("request_split_horizontal", &DockSpace::request_split_horizontal, "ratio"_a)
         .def("request_split_vertical", &DockSpace::request_split_vertical, "ratio"_a)
-        .def_prop_rw("passthru_central_node",
-                     &DockSpace::passthru_central_node,
-                     &DockSpace::set_passthru_central_node);
+        .def_prop_rw("passthru_central_node", &DockSpace::passthru_central_node, &DockSpace::set_passthru_central_node);
 }

@@ -44,6 +44,8 @@ Run from the repo root after building slangpy. The compute shader
 | `ui.LegendLocation.south` + outside + horizontal | `phases_plot` |
 | `ui.PlotLines` (sparkline) | left panel FPS readout |
 | `ui.Separator` (plain and labelled) | left panel |
+| `ui.TreeNode` (programmatic `open`) | left panel `advanced` section |
+| `ui.TreeNode` nested (scene graph) | left panel `scene` tree (geometry / lights / environment) |
 | `ui.ColorPicker3` / `ColorEdit4` | left panel `tint` / `background` |
 | `imgui.ini` persistence | enabled by default; saved layout reloads on second launch |
 

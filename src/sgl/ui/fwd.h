@@ -15,6 +15,7 @@ class Screen;
 class Window;
 class Group;
 class Text;
+class TreeNode;
 class ProgressBar;
 class Button;
 template<typename T>

@@ -67,25 +67,25 @@ def _first_existing(paths: list[str]) -> Optional[str]:
 
 # Nord palette (https://www.nordtheme.com)
 # Polar Night
-NORD0  = (0.180, 0.204, 0.251, 1.0)   # #2E3440
-NORD1  = (0.231, 0.259, 0.322, 1.0)   # #3B4252
-NORD2  = (0.263, 0.298, 0.369, 1.0)   # #434C5E
-NORD3  = (0.298, 0.337, 0.416, 1.0)   # #4C566A
+NORD0 = (0.180, 0.204, 0.251, 1.0)  # #2E3440
+NORD1 = (0.231, 0.259, 0.322, 1.0)  # #3B4252
+NORD2 = (0.263, 0.298, 0.369, 1.0)  # #434C5E
+NORD3 = (0.298, 0.337, 0.416, 1.0)  # #4C566A
 # Snow Storm
-NORD4  = (0.847, 0.871, 0.914, 1.0)   # #D8DEE9
-NORD5  = (0.898, 0.914, 0.941, 1.0)   # #E5E9F0
-NORD6  = (0.925, 0.937, 0.957, 1.0)   # #ECEFF4
+NORD4 = (0.847, 0.871, 0.914, 1.0)  # #D8DEE9
+NORD5 = (0.898, 0.914, 0.941, 1.0)  # #E5E9F0
+NORD6 = (0.925, 0.937, 0.957, 1.0)  # #ECEFF4
 # Frost
-NORD7  = (0.561, 0.737, 0.733, 1.0)   # #8FBCBB
-NORD8  = (0.533, 0.753, 0.816, 1.0)   # #88C0D0
-NORD9  = (0.506, 0.631, 0.757, 1.0)   # #81A1C1
-NORD10 = (0.369, 0.506, 0.675, 1.0)   # #5E81AC
+NORD7 = (0.561, 0.737, 0.733, 1.0)  # #8FBCBB
+NORD8 = (0.533, 0.753, 0.816, 1.0)  # #88C0D0
+NORD9 = (0.506, 0.631, 0.757, 1.0)  # #81A1C1
+NORD10 = (0.369, 0.506, 0.675, 1.0)  # #5E81AC
 # Aurora
-NORD11 = (0.749, 0.380, 0.416, 1.0)   # #BF616A  red
-NORD12 = (0.816, 0.529, 0.439, 1.0)   # #D08770  orange
-NORD13 = (0.922, 0.796, 0.545, 1.0)   # #EBCB8B  yellow
-NORD14 = (0.639, 0.745, 0.549, 1.0)   # #A3BE8C  green
-NORD15 = (0.706, 0.557, 0.678, 1.0)   # #B48EAD  magenta
+NORD11 = (0.749, 0.380, 0.416, 1.0)  # #BF616A  red
+NORD12 = (0.816, 0.529, 0.439, 1.0)  # #D08770  orange
+NORD13 = (0.922, 0.796, 0.545, 1.0)  # #EBCB8B  yellow
+NORD14 = (0.639, 0.745, 0.549, 1.0)  # #A3BE8C  green
+NORD15 = (0.706, 0.557, 0.678, 1.0)  # #B48EAD  magenta
 
 
 def _c(rgba: tuple[float, float, float, float], a: Optional[float] = None) -> "spy.float4":
@@ -154,7 +154,7 @@ class ForkDemo:
         self.pt_width = 1280
         self.pt_height = 720
         self.render_scale = 0.55
-        self.pixel_budget = 500_000   # ~707x707; ~20ms / frame with NEE
+        self.pixel_budget = 500_000  # ~707x707; ~20ms / frame with NEE
         self.scene_texture: Optional[spy.Texture] = None  # tonemapped output
         self.accum_texture: Optional[spy.Texture] = None  # running mean
         self.sample_count = 0
@@ -165,7 +165,7 @@ class ForkDemo:
         # ------------------------------------------------------------------
         self.cam_target = [0.0, 0.55, 0.0]
         self.cam_yaw = 0.0
-        self.cam_pitch = 0.25     # radians; + looks down at the scene
+        self.cam_pitch = 0.25  # radians; + looks down at the scene
         self.cam_distance = 4.5
         self.focal = 1.5
         self._mouse_down = {"left": False, "right": False, "middle": False}
@@ -224,89 +224,89 @@ class ForkDemo:
         s.colors_dark()  # baseline so all slots have sensible alpha
 
         # ----- shape / spacing -----------------------------------------
-        s.window_padding   = spy.float2(14.0, 12.0)
-        s.frame_padding    = spy.float2(10.0, 6.0)
-        s.item_spacing     = spy.float2(10.0, 8.0)
-        s.window_rounding  = 6.0
-        s.frame_rounding   = 4.0
-        s.grab_rounding    = 4.0
-        s.tab_rounding     = 4.0
-        s.scrollbar_size   = 0.0   # hide the gutter entirely
+        s.window_padding = spy.float2(14.0, 12.0)
+        s.frame_padding = spy.float2(10.0, 6.0)
+        s.item_spacing = spy.float2(10.0, 8.0)
+        s.window_rounding = 6.0
+        s.frame_rounding = 4.0
+        s.grab_rounding = 4.0
+        s.tab_rounding = 4.0
+        s.scrollbar_size = 0.0  # hide the gutter entirely
         s.scrollbar_rounding = 0.0
 
         # ----- Nord colour assignments ---------------------------------
         # Backgrounds (Polar Night)
-        s.set_color(spy.ui.Col.window_bg,        _c(NORD0))
-        s.set_color(spy.ui.Col.child_bg,         _c(NORD0))
-        s.set_color(spy.ui.Col.popup_bg,         _c(NORD1, 0.97))
-        s.set_color(spy.ui.Col.frame_bg,         _c(NORD1))
+        s.set_color(spy.ui.Col.window_bg, _c(NORD0))
+        s.set_color(spy.ui.Col.child_bg, _c(NORD0))
+        s.set_color(spy.ui.Col.popup_bg, _c(NORD1, 0.97))
+        s.set_color(spy.ui.Col.frame_bg, _c(NORD1))
         s.set_color(spy.ui.Col.frame_bg_hovered, _c(NORD2))
-        s.set_color(spy.ui.Col.frame_bg_active,  _c(NORD3))
-        s.set_color(spy.ui.Col.menu_bar_bg,      _c(NORD1))
-        s.set_color(spy.ui.Col.title_bg,         _c(NORD1))
-        s.set_color(spy.ui.Col.title_bg_active,  _c(NORD10))
+        s.set_color(spy.ui.Col.frame_bg_active, _c(NORD3))
+        s.set_color(spy.ui.Col.menu_bar_bg, _c(NORD1))
+        s.set_color(spy.ui.Col.title_bg, _c(NORD1))
+        s.set_color(spy.ui.Col.title_bg_active, _c(NORD10))
         s.set_color(spy.ui.Col.title_bg_collapsed, _c(NORD0, 0.75))
 
         # Border (Polar Night)
-        s.set_color(spy.ui.Col.border,           _c(NORD3, 0.50))
-        s.set_color(spy.ui.Col.border_shadow,    spy.float4(0, 0, 0, 0))
+        s.set_color(spy.ui.Col.border, _c(NORD3, 0.50))
+        s.set_color(spy.ui.Col.border_shadow, spy.float4(0, 0, 0, 0))
 
         # Text (Snow Storm)
-        s.set_color(spy.ui.Col.text,             _c(NORD6))
-        s.set_color(spy.ui.Col.text_disabled,    _c(NORD3))
+        s.set_color(spy.ui.Col.text, _c(NORD6))
+        s.set_color(spy.ui.Col.text_disabled, _c(NORD3))
         s.set_color(spy.ui.Col.text_selected_bg, _c(NORD10, 0.45))
 
         # Buttons / sliders / headers (Frost)
-        s.set_color(spy.ui.Col.button,           _c(NORD10))
-        s.set_color(spy.ui.Col.button_hovered,   _c(NORD9))
-        s.set_color(spy.ui.Col.button_active,    _c(NORD8))
-        s.set_color(spy.ui.Col.header,           _c(NORD10, 0.55))
-        s.set_color(spy.ui.Col.header_hovered,   _c(NORD9, 0.70))
-        s.set_color(spy.ui.Col.header_active,    _c(NORD8, 0.80))
-        s.set_color(spy.ui.Col.slider_grab,      _c(NORD8))
+        s.set_color(spy.ui.Col.button, _c(NORD10))
+        s.set_color(spy.ui.Col.button_hovered, _c(NORD9))
+        s.set_color(spy.ui.Col.button_active, _c(NORD8))
+        s.set_color(spy.ui.Col.header, _c(NORD10, 0.55))
+        s.set_color(spy.ui.Col.header_hovered, _c(NORD9, 0.70))
+        s.set_color(spy.ui.Col.header_active, _c(NORD8, 0.80))
+        s.set_color(spy.ui.Col.slider_grab, _c(NORD8))
         s.set_color(spy.ui.Col.slider_grab_active, _c(NORD7))
-        s.set_color(spy.ui.Col.check_mark,       _c(NORD8))
+        s.set_color(spy.ui.Col.check_mark, _c(NORD8))
 
         # Separators (Polar Night)
-        s.set_color(spy.ui.Col.separator,           _c(NORD3, 0.60))
-        s.set_color(spy.ui.Col.separator_hovered,   _c(NORD9))
-        s.set_color(spy.ui.Col.separator_active,    _c(NORD8))
+        s.set_color(spy.ui.Col.separator, _c(NORD3, 0.60))
+        s.set_color(spy.ui.Col.separator_hovered, _c(NORD9))
+        s.set_color(spy.ui.Col.separator_active, _c(NORD8))
 
         # Resize grips
-        s.set_color(spy.ui.Col.resize_grip,         _c(NORD3, 0.40))
+        s.set_color(spy.ui.Col.resize_grip, _c(NORD3, 0.40))
         s.set_color(spy.ui.Col.resize_grip_hovered, _c(NORD9, 0.70))
-        s.set_color(spy.ui.Col.resize_grip_active,  _c(NORD8))
+        s.set_color(spy.ui.Col.resize_grip_active, _c(NORD8))
 
         # Tabs
-        s.set_color(spy.ui.Col.tab,                 _c(NORD1))
-        s.set_color(spy.ui.Col.tab_hovered,         _c(NORD3))
-        s.set_color(spy.ui.Col.tab_selected,        _c(NORD10))
-        s.set_color(spy.ui.Col.tab_dimmed,          _c(NORD1, 0.80))
+        s.set_color(spy.ui.Col.tab, _c(NORD1))
+        s.set_color(spy.ui.Col.tab_hovered, _c(NORD3))
+        s.set_color(spy.ui.Col.tab_selected, _c(NORD10))
+        s.set_color(spy.ui.Col.tab_dimmed, _c(NORD1, 0.80))
         s.set_color(spy.ui.Col.tab_dimmed_selected, _c(NORD10, 0.80))
 
         # Docking
-        s.set_color(spy.ui.Col.docking_preview,     _c(NORD10, 0.70))
-        s.set_color(spy.ui.Col.docking_empty_bg,    _c(NORD0))
+        s.set_color(spy.ui.Col.docking_preview, _c(NORD10, 0.70))
+        s.set_color(spy.ui.Col.docking_empty_bg, _c(NORD0))
 
         # Scrollbars (hidden via scrollbar_size=0, but colour for completeness)
-        s.set_color(spy.ui.Col.scrollbar_bg,         spy.float4(0, 0, 0, 0))
-        s.set_color(spy.ui.Col.scrollbar_grab,       _c(NORD3))
+        s.set_color(spy.ui.Col.scrollbar_bg, spy.float4(0, 0, 0, 0))
+        s.set_color(spy.ui.Col.scrollbar_grab, _c(NORD3))
         s.set_color(spy.ui.Col.scrollbar_grab_hovered, _c(NORD9))
-        s.set_color(spy.ui.Col.scrollbar_grab_active,  _c(NORD8))
+        s.set_color(spy.ui.Col.scrollbar_grab_active, _c(NORD8))
 
         # Plot colours (Aurora) -- ImPlot uses its own palette but the
         # ImGui PlotLines / PlotHistogram fallback still hits these.
-        s.set_color(spy.ui.Col.plot_lines,             _c(NORD8))
-        s.set_color(spy.ui.Col.plot_lines_hovered,     _c(NORD7))
-        s.set_color(spy.ui.Col.plot_histogram,         _c(NORD14))
+        s.set_color(spy.ui.Col.plot_lines, _c(NORD8))
+        s.set_color(spy.ui.Col.plot_lines_hovered, _c(NORD7))
+        s.set_color(spy.ui.Col.plot_histogram, _c(NORD14))
         s.set_color(spy.ui.Col.plot_histogram_hovered, _c(NORD13))
 
         # Table
-        s.set_color(spy.ui.Col.table_header_bg,    _c(NORD2))
+        s.set_color(spy.ui.Col.table_header_bg, _c(NORD2))
         s.set_color(spy.ui.Col.table_border_strong, _c(NORD3))
-        s.set_color(spy.ui.Col.table_border_light,  _c(NORD2))
-        s.set_color(spy.ui.Col.table_row_bg,       spy.float4(0, 0, 0, 0))
-        s.set_color(spy.ui.Col.table_row_bg_alt,   _c(NORD1, 0.40))
+        s.set_color(spy.ui.Col.table_border_light, _c(NORD2))
+        s.set_color(spy.ui.Col.table_row_bg, spy.float4(0, 0, 0, 0))
+        s.set_color(spy.ui.Col.table_row_bg_alt, _c(NORD1, 0.40))
 
     # -------------------------------------------------------------- widgets
 
@@ -324,15 +324,15 @@ class ForkDemo:
         # node. Title makes it obviously a window; the fork's
         # show_title_bar=False feature is still exercised by the other
         # demo windows when you collapse them via the [v] arrow.
-        self.left_window = spy.ui.Window(
-            screen, "controls", size=spy.float2(400, 900)
-        )
+        self.left_window = spy.ui.Window(screen, "controls", size=spy.float2(400, 900))
         # Dedicated viewport window holding the ui.Image of the
         # path-tracer output. Docked to the right node so it fills the
         # entire right side of the layout. Mouse drag inside this
         # window's area drives the camera.
         self.viewport_window = spy.ui.Window(
-            screen, "viewport", position=spy.float2(440, 30),
+            screen,
+            "viewport",
+            position=spy.float2(440, 30),
             size=spy.float2(1100, 900),
         )
 
@@ -350,58 +350,130 @@ class ForkDemo:
         self.animate = spy.ui.CheckBox(rendering, "animate", value=True)
         # Exposure is post-accumulation, so no reset callback.
         self.exposure = spy.ui.SliderFloat(
-            rendering, "exposure", value=1.0, min=0.1, max=5.0,
+            rendering,
+            "exposure",
+            value=1.0,
+            min=0.1,
+            max=5.0,
         )
+
         # Render-scale changes the PT target resolution; reallocating
         # the texture will reset the accumulator regardless, but make
         # it explicit so the slider feels responsive.
         def _set_scale(v: float) -> None:
             self.render_scale = v
             self.sample_count = 0
+
         self.render_scale_slider = spy.ui.SliderFloat(
-            rendering, "render scale", value=self.render_scale,
-            min=0.25, max=1.0, callback=_set_scale,
+            rendering,
+            "render scale",
+            value=self.render_scale,
+            min=0.25,
+            max=1.0,
+            callback=_set_scale,
         )
         spy.ui.Button(rendering, "reset accumulation", callback=_reset)
         spy.ui.Button(rendering, "save screenshot", callback=self._save_screenshot)
 
-        # ----- group: scene -------------------------------------------
-        scene = spy.ui.Group(self.left_window, "scene")
+        # ----- scene tree (nested TreeNodes) --------------------------
+        # A scene-graph mirror of the SDF scene in scene.slang. TreeNode
+        # widgets nest arbitrarily: a TreeNode parented to another
+        # TreeNode renders indented inside it (ImGui TreeNodeEx/TreePop).
+        # The leaves are live controls, so editing the tree drives the
+        # path tracer and resets accumulation via _reset.
+        scene = spy.ui.TreeNode(self.left_window, "scene", open=True)
+
+        # geometry/
+        geometry = spy.ui.TreeNode(scene, "geometry", open=True)
+
+        orbiting = spy.ui.TreeNode(geometry, "orbiting spheres")
         self.tint = spy.ui.ColorPicker3(
-            scene, "tint sphere",
+            orbiting,
+            "tint sphere",
             value=spy.float3(NORD8[0], NORD8[1], NORD8[2]),
             callback=_reset,
         )
-        self.background = spy.ui.ColorEdit4(
-            scene, "sky / ambient",
-            value=spy.float4(0.0, 0.0, 0.0, 1.0),
+        spy.ui.Text(orbiting, "+ 2 fixed diffuse spheres")
+
+        mirror = spy.ui.TreeNode(geometry, "mirror sphere")
+        spy.ui.Text(mirror, "metal . bobbing")
+
+        back_row = spy.ui.TreeNode(geometry, "back row")
+        spy.ui.Text(back_row, "5 x diffuse")
+
+        # lights/  -- one intensity multiplier per light. 1.0 keeps the
+        # shader's baked-in intensity; 0.0 turns the light off entirely.
+        lights = spy.ui.TreeNode(scene, "lights", open=True)
+        self.light_warm = spy.ui.SliderFloat(
+            lights,
+            "warm",
+            value=1.0,
+            min=0.0,
+            max=3.0,
+            callback=_reset,
+        )
+        self.light_cool = spy.ui.SliderFloat(
+            lights,
+            "cool",
+            value=1.0,
+            min=0.0,
+            max=3.0,
+            callback=_reset,
+        )
+        self.light_pink = spy.ui.SliderFloat(
+            lights,
+            "pink",
+            value=1.0,
+            min=0.0,
+            max=3.0,
+            callback=_reset,
+        )
+        self.light_lime = spy.ui.SliderFloat(
+            lights,
+            "lime",
+            value=1.0,
+            min=0.0,
+            max=3.0,
             callback=_reset,
         )
 
-        # ----- group: lights ------------------------------------------
-        # One intensity multiplier per light. 1.0 keeps the shader's
-        # baked-in intensity; 0.0 turns the light off entirely.
-        lights = spy.ui.Group(self.left_window, "lights")
-        self.light_warm = spy.ui.SliderFloat(
-            lights, "warm", value=1.0, min=0.0, max=3.0, callback=_reset,
+        # environment/
+        environment = spy.ui.TreeNode(scene, "environment")
+        self.background = spy.ui.ColorEdit4(
+            environment,
+            "sky / ambient",
+            value=spy.float4(0.0, 0.0, 0.0, 1.0),
+            callback=_reset,
         )
-        self.light_cool = spy.ui.SliderFloat(
-            lights, "cool", value=1.0, min=0.0, max=3.0, callback=_reset,
+        spy.ui.Text(environment, "ground plane")
+
+        # ----- tree node: advanced (collapsible, open by default) -----
+        advanced = spy.ui.TreeNode(self.left_window, "advanced", open=True)
+        self.gamma = spy.ui.SliderFloat(
+            advanced,
+            "gamma",
+            value=2.2,
+            min=1.0,
+            max=3.0,
+            callback=_reset,
         )
-        self.light_pink = spy.ui.SliderFloat(
-            lights, "pink", value=1.0, min=0.0, max=3.0, callback=_reset,
-        )
-        self.light_lime = spy.ui.SliderFloat(
-            lights, "lime", value=1.0, min=0.0, max=3.0, callback=_reset,
+        self.exposure = spy.ui.SliderFloat(
+            advanced,
+            "exposure",
+            value=1.0,
+            min=0.1,
+            max=4.0,
+            callback=_reset,
         )
 
         # ----- group: stats -------------------------------------------
         stats = spy.ui.Group(self.left_window, "stats")
-        self.fps_text  = spy.ui.Text(stats, "FPS: --")
-        self.spp_text  = spy.ui.Text(stats, "samples: 0")
+        self.fps_text = spy.ui.Text(stats, "FPS: --")
+        self.spp_text = spy.ui.Text(stats, "samples: 0")
         self.size_text = spy.ui.Text(stats, "render: -- x --")
         self.spark = spy.ui.PlotLines(
-            stats, label="ms",
+            stats,
+            label="ms",
             values=[0.0] * 120,
             overlay="frame ms",
             size=spy.float2(0, 60),
@@ -481,14 +553,14 @@ class ForkDemo:
         pos = (tx + d * cp * sy, ty + d * sp, tz + d * cp * cy)
         # Forward = target - pos (normalised)
         fx, fy, fz = (tx - pos[0], ty - pos[1], tz - pos[2])
-        fl = math.sqrt(fx*fx + fy*fy + fz*fz) or 1.0
+        fl = math.sqrt(fx * fx + fy * fy + fz * fz) or 1.0
         forward = (fx / fl, fy / fl, fz / fl)
         # Right = forward x world_up
         wux, wuy, wuz = 0.0, 1.0, 0.0
         rx = forward[1] * wuz - forward[2] * wuy
         ry = forward[2] * wux - forward[0] * wuz
         rz = forward[0] * wuy - forward[1] * wux
-        rl = math.sqrt(rx*rx + ry*ry + rz*rz) or 1.0
+        rl = math.sqrt(rx * rx + ry * ry + rz * rz) or 1.0
         right = (rx / rl, ry / rl, rz / rl)
         # Up = right x forward (gives a clean orthonormal basis)
         ux = right[1] * forward[2] - right[2] * forward[1]
@@ -501,12 +573,12 @@ class ForkDemo:
             spy.float3(*forward),
         )
 
-    def _rect_contains(self, w: "spy.ui.Window", px: float, py: float,
-                       inset_top: float = 0.0) -> bool:
+    def _rect_contains(
+        self, w: "spy.ui.Window", px: float, py: float, inset_top: float = 0.0
+    ) -> bool:
         wp = w.position
         ws = w.size
-        return (wp.x <= px <= wp.x + ws.x
-                and wp.y + inset_top <= py <= wp.y + ws.y)
+        return wp.x <= px <= wp.x + ws.x and wp.y + inset_top <= py <= wp.y + ws.y
 
     def _click_targets_viewport(self, px: float, py: float) -> bool:
         """The click is camera-drag intent iff it lands on the viewport
@@ -515,11 +587,12 @@ class ForkDemo:
         wp = self.viewport_window.position
         ws = self.viewport_window.size
         # Title-bar inset (rough, but the only ImGui geometry we don't
-        # get from the binding). frame_padding.y=6 + font 22 ≈ 38.
+        # get from the binding). frame_padding.y=6 + font 22 ~= 38.
         title_h = 38.0
         pad_x = 12.0
-        in_image = (wp.x + pad_x <= px <= wp.x + ws.x - pad_x
-                    and wp.y + title_h <= py <= wp.y + ws.y - 4.0)
+        in_image = (
+            wp.x + pad_x <= px <= wp.x + ws.x - pad_x and wp.y + title_h <= py <= wp.y + ws.y - 4.0
+        )
         if not in_image:
             return False
         # Reject if any other panel covers the cursor -- avoids
@@ -617,7 +690,7 @@ class ForkDemo:
             bmp = bmp.convert(
                 spy.Bitmap.PixelFormat.rgb,
                 spy.Bitmap.ComponentType.uint8,
-                srgb_gamma=False,   # the shader has already gamma'd
+                srgb_gamma=False,  # the shader has already gamma'd
             )
             path = f"fork_demo_{self.sample_count:04d}spp.png"
             bmp.write_async(path)
@@ -625,8 +698,7 @@ class ForkDemo:
         except Exception as e:
             print(f"[fork_demo] screenshot failed: {e}")
 
-    def _ensure_pt_textures(self, pt_w: int, pt_h: int,
-                            disp_w: float, disp_h: float) -> None:
+    def _ensure_pt_textures(self, pt_w: int, pt_h: int, disp_w: float, disp_h: float) -> None:
         """Allocate / reallocate the path-tracer's textures so the
         render target is `(pt_w, pt_h)` pixels, and size the ui.Image
         widget to `(disp_w, disp_h)` so it fills the window content
@@ -642,16 +714,14 @@ class ForkDemo:
                 format=spy.Format.rgba16_float,
                 width=pt_w,
                 height=pt_h,
-                usage=(spy.TextureUsage.shader_resource
-                       | spy.TextureUsage.unordered_access),
+                usage=(spy.TextureUsage.shader_resource | spy.TextureUsage.unordered_access),
                 label="pt_output",
             )
             self.accum_texture = self.device.create_texture(
                 format=spy.Format.rgba16_float,
                 width=pt_w,
                 height=pt_h,
-                usage=(spy.TextureUsage.shader_resource
-                       | spy.TextureUsage.unordered_access),
+                usage=(spy.TextureUsage.shader_resource | spy.TextureUsage.unordered_access),
                 label="pt_accum",
             )
             self.viewport_image.texture = self.scene_texture
@@ -715,7 +785,7 @@ class ForkDemo:
             assert self.scene_texture is not None and self.accum_texture is not None
 
             tint = self.tint.value
-            sky  = self.background.value
+            sky = self.background.value
             exposure = self.exposure.value
             cam_pos, cam_right, cam_up, cam_fwd = self._camera_basis()
 

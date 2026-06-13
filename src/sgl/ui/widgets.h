@@ -242,8 +242,7 @@ public:
             // not persisted to imgui.ini, so the first frame after a
             // fresh layout still shows a tab strip.
             ImGuiWindowClass window_class;
-            window_class.DockNodeFlagsOverrideSet
-                = ImGuiDockNodeFlags_NoTabBar | ImGuiDockNodeFlags_NoDockingOverMe;
+            window_class.DockNodeFlagsOverrideSet = ImGuiDockNodeFlags_NoTabBar | ImGuiDockNodeFlags_NoDockingOverMe;
             ImGui::SetNextWindowClass(&window_class);
         }
 
@@ -262,9 +261,8 @@ public:
                     // Mixing the private (ImGuiDockNodeFlagsPrivate_) and
                     // public (ImGuiDockNodeFlags_) enums triggers
                     // -Wdeprecated-enum-enum-conversion; cast through int.
-                    node->LocalFlags |= (int)ImGuiDockNodeFlags_NoTabBar
-                                      | (int)ImGuiDockNodeFlags_NoDockingSplit
-                                      | (int)ImGuiDockNodeFlags_NoCloseButton;
+                    node->LocalFlags |= (int)ImGuiDockNodeFlags_NoTabBar | (int)ImGuiDockNodeFlags_NoDockingSplit
+                        | (int)ImGuiDockNodeFlags_NoCloseButton;
                     node->WantHiddenTabBarUpdate = true;
                 }
             }
@@ -325,6 +323,56 @@ private:
     std::string m_label;
 };
 
+/// Collapsible tree node. Unlike Group, the open/close state is
+/// programmatically controllable via the `open` property and reflects
+/// user interaction back after each frame.
+class TreeNode : public Widget {
+    SGL_OBJECT(TreeNode)
+public:
+    TreeNode(Widget* parent, std::string_view label = "", bool open = false)
+        : Widget(parent)
+        , m_label(label)
+        , m_open(open)
+    {
+    }
+
+    const std::string& label() const { return m_label; }
+    void set_label(std::string_view label) { m_label = label; }
+
+    bool open() const { return m_open; }
+    void set_open(bool open)
+    {
+        m_open = open;
+        m_set_open = true;
+    }
+
+    virtual void render() override
+    {
+        if (!m_visible)
+            return;
+
+        ScopedID id(this);
+        ScopedDisable disable(!m_enabled);
+
+        if (m_set_open) {
+            ImGui::SetNextItemOpen(m_open);
+            m_set_open = false;
+        }
+
+        bool node_open = ImGui::TreeNodeEx(m_label.c_str(), ImGuiTreeNodeFlags_None);
+        m_open = node_open;
+        if (node_open) {
+            Widget::render();
+            ImGui::TreePop();
+        }
+    }
+
+private:
+    std::string m_label;
+    bool m_open{false};
+    bool m_set_open{false};
+};
+
 class Text : public Widget {
     SGL_OBJECT(Text)
 public:
@@ -355,19 +403,22 @@ class Separator : public Widget {
     SGL_OBJECT(Separator)
 public:
     Separator(Widget* parent, std::string_view label = "")
-        : Widget(parent), m_label(label)
+        : Widget(parent)
+        , m_label(label)
     {
     }
     const std::string& label() const { return m_label; }
     void set_label(std::string_view v) { m_label = v; }
     virtual void render() override
     {
-        if (!m_visible) return;
+        if (!m_visible)
+            return;
         if (m_label.empty())
             ImGui::Separator();
         else
             ImGui::SeparatorText(m_label.c_str());
     }
+
 private:
     std::string m_label;
 };
@@ -985,8 +1036,13 @@ private:
 class Image : public Widget {
     SGL_OBJECT(Image)
 public:
-    Image(Widget* parent, ref<Texture> texture = nullptr, float2 size = float2(0.f, 0.f),
-          float2 uv0 = float2(0.f, 0.f), float2 uv1 = float2(1.f, 1.f))
+    Image(
+        Widget* parent,
+        ref<Texture> texture = nullptr,
+        float2 size = float2(0.f, 0.f),
+        float2 uv0 = float2(0.f, 0.f),
+        float2 uv1 = float2(1.f, 1.f)
+    )
         : Widget(parent)
         , m_texture(texture)
         , m_size(size)
@@ -1031,15 +1087,15 @@ private:
 /// Anchor used to place a plot's legend, mirroring ImPlotLocation_*.
 /// Compass-direction names (north = top, south = bottom, etc.).
 enum class LegendLocation : int {
-    center     = 0,
-    north      = 1 << 0,
-    south      = 1 << 1,
-    west       = 1 << 2,
-    east       = 1 << 3,
-    north_west = north | west,   // top-left
-    north_east = north | east,   // top-right (ImPlot default)
-    south_west = south | west,   // bottom-left
-    south_east = south | east,   // bottom-right
+    center = 0,
+    north = 1 << 0,
+    south = 1 << 1,
+    west = 1 << 2,
+    east = 1 << 3,
+    north_west = north | west, // top-left
+    north_east = north | east, // top-right (ImPlot default)
+    south_west = south | west, // bottom-left
+    south_east = south | east, // bottom-right
 };
 
 /// Real plotting via ImPlot. A single plot window with one or more line
@@ -1056,13 +1112,18 @@ enum class LegendLocation : int {
 class Plot : public Widget {
     SGL_OBJECT(Plot)
 public:
-    Plot(Widget* parent, std::string_view label = "plot",
-         std::string_view x_label = "", std::string_view y_label = "",
-         float2 size = float2(-1.f, 200.f), bool autofit_x = true,
-         bool autofit_y = true,
-         LegendLocation legend_location = LegendLocation::north_west,
-         bool legend_outside = false,
-         bool legend_horizontal = false)
+    Plot(
+        Widget* parent,
+        std::string_view label = "plot",
+        std::string_view x_label = "",
+        std::string_view y_label = "",
+        float2 size = float2(-1.f, 200.f),
+        bool autofit_x = true,
+        bool autofit_y = true,
+        LegendLocation legend_location = LegendLocation::north_west,
+        bool legend_outside = false,
+        bool legend_horizontal = false
+    )
         : Widget(parent)
         , m_label(label)
         , m_x_label(x_label)
@@ -1095,8 +1156,18 @@ public:
     bool legend_horizontal() const { return m_legend_horizontal; }
     void set_legend_horizontal(bool v) { m_legend_horizontal = v; }
 
-    void set_x_limits(float lo, float hi) { m_x_min = lo; m_x_max = hi; m_has_x_limits = true; }
-    void set_y_limits(float lo, float hi) { m_y_min = lo; m_y_max = hi; m_has_y_limits = true; }
+    void set_x_limits(float lo, float hi)
+    {
+        m_x_min = lo;
+        m_x_max = hi;
+        m_has_x_limits = true;
+    }
+    void set_y_limits(float lo, float hi)
+    {
+        m_y_min = lo;
+        m_y_max = hi;
+        m_has_y_limits = true;
+    }
     void clear_limits() { m_has_x_limits = m_has_y_limits = false; }
 
     /// Per-series storage. Each series is either a line plot (ImPlot::PlotLine)
@@ -1107,7 +1178,7 @@ public:
     struct Series {
         SeriesKind kind{SeriesKind::line};
         std::vector<float> values;
-        int bins{-1};         // -1 -> ImPlotBin_Sturges
+        int bins{-1}; // -1 -> ImPlotBin_Sturges
         double bar_scale{1.0};
     };
 
@@ -1127,8 +1198,7 @@ public:
     /// `values`; ImPlot bins them on render. `bins == -1` uses
     /// ImPlotBin_Sturges (auto). `bar_scale` widens or narrows the bars
     /// (1.0 = full bin width).
-    void add_histogram(std::string_view name, std::vector<float> values,
-                       int bins = -1, double bar_scale = 1.0)
+    void add_histogram(std::string_view name, std::vector<float> values, int bins = -1, double bar_scale = 1.0)
     {
         std::string n(name);
         Series& s = m_series[n];
@@ -1161,9 +1231,12 @@ public:
     ///
     /// All inner vectors must have the same length (= group count); shorter
     /// ones are zero-padded on the fly at render time.
-    void add_bar_groups(std::vector<std::string> labels,
-                        std::vector<std::vector<float>> values_per_label,
-                        double group_size = 0.67, bool stacked = false)
+    void add_bar_groups(
+        std::vector<std::string> labels,
+        std::vector<std::vector<float>> values_per_label,
+        double group_size = 0.67,
+        bool stacked = false
+    )
     {
         m_bar_groups_labels = std::move(labels);
         m_bar_groups_values = std::move(values_per_label);
@@ -1174,7 +1247,8 @@ public:
 
     void clear_bar_groups() { m_has_bar_groups = false; }
 
-    void clear() {
+    void clear()
+    {
         m_series.clear();
         m_series_order.clear();
         m_has_bar_groups = false;
@@ -1182,7 +1256,8 @@ public:
 
     virtual void render() override
     {
-        if (!m_visible) return;
+        if (!m_visible)
+            return;
         ScopedID id(this);
         ScopedDisable disable(!m_enabled);
         if (ImPlot::BeginPlot(m_label.c_str(), ImVec2(m_size.x, m_size.y))) {
@@ -1191,7 +1266,8 @@ public:
             ImPlot::SetupAxes(
                 m_x_label.empty() ? nullptr : m_x_label.c_str(),
                 m_y_label.empty() ? nullptr : m_y_label.c_str(),
-                x_flags, y_flags
+                x_flags,
+                y_flags
             );
             {
                 // Convert our enum (kept ABI-compatible with ImPlotLocation_)
@@ -1210,16 +1286,20 @@ public:
                 ImPlot::SetupAxisLimits(ImAxis_Y1, m_y_min, m_y_max, ImPlotCond_Always);
             for (const auto& name : m_series_order) {
                 const Series& s = m_series.at(name);
-                if (s.values.empty()) continue;
+                if (s.values.empty())
+                    continue;
                 if (s.kind == SeriesKind::line) {
-                    ImPlot::PlotLine(name.c_str(), s.values.data(),
-                                     static_cast<int>(s.values.size()));
+                    ImPlot::PlotLine(name.c_str(), s.values.data(), static_cast<int>(s.values.size()));
                 } else {
                     // bins: -1 == ImPlotBin_Sturges; positive -> literal count.
                     int bins = (s.bins < 0) ? ImPlotBin_Sturges : s.bins;
-                    ImPlot::PlotHistogram(name.c_str(), s.values.data(),
-                                          static_cast<int>(s.values.size()),
-                                          bins, s.bar_scale);
+                    ImPlot::PlotHistogram(
+                        name.c_str(),
+                        s.values.data(),
+                        static_cast<int>(s.values.size()),
+                        bins,
+                        s.bar_scale
+                    );
                 }
             }
             // Bar-groups overlay (PlotBarGroups). Useful for showing a
@@ -1243,13 +1323,15 @@ public:
                     std::vector<const char*> label_ptrs(item_count);
                     for (int i = 0; i < item_count; ++i)
                         label_ptrs[i] = m_bar_groups_labels[i].c_str();
-                    ImPlotBarGroupsFlags flags = m_bar_groups_stacked
-                        ? ImPlotBarGroupsFlags_Stacked
-                        : 0;
+                    ImPlotBarGroupsFlags flags = m_bar_groups_stacked ? ImPlotBarGroupsFlags_Stacked : 0;
                     ImPlot::PlotBarGroups(
-                        label_ptrs.data(), flat.data(),
-                        item_count, group_count,
-                        m_bar_groups_group_size, /*shift*/ 0.0, flags
+                        label_ptrs.data(),
+                        flat.data(),
+                        item_count,
+                        group_count,
+                        m_bar_groups_group_size,
+                        /*shift*/ 0.0,
+                        flags
                     );
                 }
             }
@@ -1290,11 +1372,15 @@ private:
 class PlotLines : public Widget {
     SGL_OBJECT(PlotLines)
 public:
-    PlotLines(Widget* parent, std::string_view label = "", std::vector<float> values = {},
-              std::string_view overlay = "",
-              float scale_min = std::numeric_limits<float>::max(),
-              float scale_max = std::numeric_limits<float>::max(),
-              float2 size = float2(0.f, 80.f))
+    PlotLines(
+        Widget* parent,
+        std::string_view label = "",
+        std::vector<float> values = {},
+        std::string_view overlay = "",
+        float scale_min = std::numeric_limits<float>::max(),
+        float scale_max = std::numeric_limits<float>::max(),
+        float2 size = float2(0.f, 80.f)
+    )
         : Widget(parent)
         , m_label(label)
         , m_values(std::move(values))
@@ -1336,7 +1422,8 @@ public:
 
     virtual void render() override
     {
-        if (!m_visible) return;
+        if (!m_visible)
+            return;
         ScopedID id(this);
         ScopedDisable disable(!m_enabled);
         const char* overlay = m_overlay.empty() ? nullptr : m_overlay.c_str();
@@ -1366,15 +1453,16 @@ class ColorEdit3 : public ValueProperty<float3> {
     SGL_OBJECT(ColorEdit3)
 public:
     using Base = ValueProperty<float3>;
-    ColorEdit3(Widget* parent, std::string_view label = "", float3 value = float3(0.f),
-               Callback callback = {})
+    ColorEdit3(Widget* parent, std::string_view label = "", float3 value = float3(0.f), Callback callback = {})
         : Base(parent, label, value, callback)
     {
     }
     virtual void render() override
     {
-        if (!m_visible) return;
-        ScopedID id(this); ScopedDisable disable(!m_enabled);
+        if (!m_visible)
+            return;
+        ScopedID id(this);
+        ScopedDisable disable(!m_enabled);
         if (ImGui::ColorEdit3(m_label.c_str(), &m_value.x))
             notify();
     }
@@ -1384,15 +1472,16 @@ class ColorEdit4 : public ValueProperty<float4> {
     SGL_OBJECT(ColorEdit4)
 public:
     using Base = ValueProperty<float4>;
-    ColorEdit4(Widget* parent, std::string_view label = "", float4 value = float4(0.f),
-               Callback callback = {})
+    ColorEdit4(Widget* parent, std::string_view label = "", float4 value = float4(0.f), Callback callback = {})
         : Base(parent, label, value, callback)
     {
     }
     virtual void render() override
     {
-        if (!m_visible) return;
-        ScopedID id(this); ScopedDisable disable(!m_enabled);
+        if (!m_visible)
+            return;
+        ScopedID id(this);
+        ScopedDisable disable(!m_enabled);
         if (ImGui::ColorEdit4(m_label.c_str(), &m_value.x))
             notify();
     }
@@ -1403,15 +1492,16 @@ class ColorPicker3 : public ValueProperty<float3> {
     SGL_OBJECT(ColorPicker3)
 public:
     using Base = ValueProperty<float3>;
-    ColorPicker3(Widget* parent, std::string_view label = "", float3 value = float3(0.f),
-                 Callback callback = {})
+    ColorPicker3(Widget* parent, std::string_view label = "", float3 value = float3(0.f), Callback callback = {})
         : Base(parent, label, value, callback)
     {
     }
     virtual void render() override
     {
-        if (!m_visible) return;
-        ScopedID id(this); ScopedDisable disable(!m_enabled);
+        if (!m_visible)
+            return;
+        ScopedID id(this);
+        ScopedDisable disable(!m_enabled);
         if (ImGui::ColorPicker3(m_label.c_str(), &m_value.x))
             notify();
     }
@@ -1421,15 +1511,16 @@ class ColorPicker4 : public ValueProperty<float4> {
     SGL_OBJECT(ColorPicker4)
 public:
     using Base = ValueProperty<float4>;
-    ColorPicker4(Widget* parent, std::string_view label = "", float4 value = float4(0.f),
-                 Callback callback = {})
+    ColorPicker4(Widget* parent, std::string_view label = "", float4 value = float4(0.f), Callback callback = {})
         : Base(parent, label, value, callback)
     {
     }
     virtual void render() override
     {
-        if (!m_visible) return;
-        ScopedID id(this); ScopedDisable disable(!m_enabled);
+        if (!m_visible)
+            return;
+        ScopedID id(this);
+        ScopedDisable disable(!m_enabled);
         if (ImGui::ColorPicker4(m_label.c_str(), &m_value.x))
             notify();
     }
@@ -1483,10 +1574,9 @@ public:
 
     virtual void render() override
     {
-        if (!m_visible) return;
-        ImGuiDockNodeFlags flags = m_passthru
-            ? ImGuiDockNodeFlags_PassthruCentralNode
-            : ImGuiDockNodeFlags_None;
+        if (!m_visible)
+            return;
+        ImGuiDockNodeFlags flags = m_passthru ? ImGuiDockNodeFlags_PassthruCentralNode : ImGuiDockNodeFlags_None;
         ImGuiID id = ImGui::DockSpaceOverViewport(0, ImGui::GetMainViewport(), flags);
         m_dock_id = static_cast<uint32_t>(id);
 
