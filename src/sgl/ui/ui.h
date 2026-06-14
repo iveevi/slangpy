@@ -115,17 +115,17 @@ public:
     /// Write a single color slot. RGBA float4 in [0, 1].
     void set_color(Col c, float4 value);
 
-    // Scalar / vector accessors -- one pair per ImGuiStyle field.
-    // Implementations are in ui.cpp to keep imgui.h out of headers.
-    #define SGL_UI_STYLE_FLOAT(name) \
-        float name() const;          \
-        void set_##name(float v);
-    #define SGL_UI_STYLE_VEC2(name)  \
-        float2 name() const;         \
-        void set_##name(float2 v);
-    #define SGL_UI_STYLE_BOOL(name)  \
-        bool name() const;           \
-        void set_##name(bool v);
+// Scalar / vector accessors -- one pair per ImGuiStyle field.
+// Implementations are in ui.cpp to keep imgui.h out of headers.
+#define SGL_UI_STYLE_FLOAT(name)                                                                                       \
+    float name() const;                                                                                                \
+    void set_##name(float v);
+#define SGL_UI_STYLE_VEC2(name)                                                                                        \
+    float2 name() const;                                                                                               \
+    void set_##name(float2 v);
+#define SGL_UI_STYLE_BOOL(name)                                                                                        \
+    bool name() const;                                                                                                 \
+    void set_##name(bool v);
 
     SGL_UI_STYLE_FLOAT(alpha)
     SGL_UI_STYLE_FLOAT(disabled_alpha)
@@ -169,9 +169,9 @@ public:
     SGL_UI_STYLE_FLOAT(curve_tessellation_tol)
     SGL_UI_STYLE_FLOAT(circle_tessellation_max_error)
 
-    #undef SGL_UI_STYLE_FLOAT
-    #undef SGL_UI_STYLE_VEC2
-    #undef SGL_UI_STYLE_BOOL
+#undef SGL_UI_STYLE_FLOAT
+#undef SGL_UI_STYLE_VEC2
+#undef SGL_UI_STYLE_BOOL
 
 private:
     ImGuiContext* m_imgui_context;
@@ -196,14 +196,28 @@ public:
     /// Load a TTF font from disk and register it under \c name. The font is
     /// rasterised at \c size pixels. If \c is_default is true the new font
     /// becomes the default ImGui font (used unless PushFont is called).
+    /// If \c merge is true the glyphs are merged into the previously added
+    /// font (ImFontConfig::MergeMode) rather than creating a separate font.
+    /// This is how an icon font (e.g. FontAwesome) is overlaid onto a body
+    /// font so icon glyphs can be used inline in labels. \c is_default is
+    /// ignored when merging (the merged-into font keeps its default status).
     /// Must be called BEFORE the first frame -- adding fonts mid-frame
     /// invalidates ImGui's atlas.
-    void add_font(const char* name, const char* path, float size, bool is_default = false);
+    void add_font(const char* name, const char* path, float size, bool is_default = false, bool merge = false);
 
     /// Apply a previously-loaded font to subsequent widgets (until pop_font).
     /// Convenience wrapper for ImGui::PushFont(get_font(name)).
     void push_font(const char* name);
     void pop_font();
+
+    /// True if any interactive ImGui item is hovered (ImGui::IsAnyItemHovered).
+    /// Reflects the last rendered frame. Useful to tell apart a click on a
+    /// widget from a click on inert content (e.g. an Image) when routing input.
+    bool is_any_item_hovered();
+
+    /// Measure the rendered size of \c text with the current font
+    /// (ImGui::CalcTextSize). Useful for laying out / right-aligning labels.
+    float2 calc_text_size(const char* text);
 
     /// Begin a new ImGui frame and renders the main screen widget.
     /// ImGui widget calls are generally only valid between `begin_frame` and `end_frame`.

@@ -6,15 +6,17 @@
 #
 #   * spy.Window(decorated=False) -- borderless OS window
 #   * ui.Context.add_font / push_font / pop_font -- font registry
+#   * ui.Context.add_font(merge=True) -- FontAwesome icon-font merge
+#   * ui.CursorPos + ui.Button -- FontAwesome action toolbar over the viewport
 #   * ui.Context.style + ui.Col + ui.Style.set_color -- live ImGuiStyle
 #   * imgui.ini persistence (saved layout reload on second launch)
 #   * ui.DockSpace with passthru_central_node and request_split_horizontal
-#   * ui.Window with show_title_bar=False and programmatic dock_id
+#   * ui.Window.dock_id -- programmatic docking
 #   * ui.Image displaying a compute-written texture
 #   * ui.Plot mixing line, histogram and bar-group series
 #   * ui.LegendLocation + legend_outside + legend_horizontal
-#   * ui.PlotLines (sparkline)
-#   * ui.Separator (plain and labelled)
+#   * ui.Plot.add_bar_groups (rolling frame-time bar chart)
+#   * ui.TreeNode (nested scene inspector)
 #   * ui.ColorEdit4 and ui.ColorPicker3
 #
 # Run from the repo root after building:  python examples/fork_demo/fork_demo.py
@@ -57,6 +59,26 @@ FONT_CANDIDATES = {
 FONT_BODY_SIZE = 22.0
 FONT_HEADER_SIZE = 28.0
 
+# Icon font (FontAwesome 6 Free Solid), merged into the body font via
+# add_font(merge=True) so icon glyphs render inline in labels. The TTF is
+# bundled next to this script (fa-solid-900.ttf, SIL OFL 1.1) so the icons
+# always work -- no dependence on a system font being installed. System
+# paths are kept as fallbacks. Codepoints are FontAwesome PUA values.
+ICON_FONT_CANDIDATES = [
+    str(EXAMPLE_DIR / "fa-solid-900.ttf"),
+    "/usr/share/fonts/fontawesome/fa-solid-900.ttf",
+    "/usr/share/fonts/TTF/fa-solid-900.ttf",
+    str(Path.home() / ".local/share/fonts/fa-solid-900.ttf"),
+]
+ICON_PLAY = "\uf04b"  # play
+ICON_PAUSE = "\uf04c"  # pause
+ICON_RESET = "\uf021"  # arrows-rotate / refresh
+ICON_CAMERA = "\uf030"  # camera
+
+
+# Number of frame-time bars shown in the performance bar-group chart.
+FRAME_BARS = 30
+
 
 def _first_existing(paths: list[str]) -> Optional[str]:
     for p in paths:
@@ -94,40 +116,41 @@ def _c(rgba: tuple[float, float, float, float], a: Optional[float] = None) -> "s
 
 
 class ForkDemo:
-    def __init__(self) -> None:
-        # GLFW needs an X display (this build is X11-only). On a Wayland
-        # session like niri, that means XWayland -- DISPLAY must point at
-        # it (typically ":1" via xwayland-satellite). Give a useful
-        # message instead of a bare "Failed to initialize GLFW".
-        if not os.environ.get("DISPLAY"):
-            raise RuntimeError(
-                "DISPLAY is unset. This demo's GLFW build is X11-only, so "
-                "it needs an X display (under Wayland, XWayland). On niri "
-                "with xwayland-satellite the value is typically ':1'. "
-                "Re-run as:  DISPLAY=:1 python examples/fork_demo/fork_demo.py"
-            )
+    def __init__(self, headless: bool = False) -> None:
+        # Headless mode skips the OS window/surface so the UI can be rendered
+        # to an offscreen texture (see render_headless) without a display --
+        # useful for screenshots / inspection in CI or over SSH.
+        self.headless = headless
+        self.window: Optional[spy.Window] = None
+        self.surface = None
 
-        # ------------------------------------------------------------------
-        # Default-decorated OS window so tiling WMs (niri etc.) manage
-        # it as a normal tile. The fork's `decorated=False` flag is
-        # documented in docs/fork/window.rst -- pass it through here if
-        # you want a borderless surface (note: under a scrolling tiling
-        # WM the resulting tile may park off-viewport).
-        # ------------------------------------------------------------------
-        self.window = spy.Window(
-            width=1600,
-            height=900,
-            title="fork demo",
-            resizable=True,
-        )
+        if not headless:
+            # GLFW needs an X display (this build is X11-only). On a Wayland
+            # session like niri, that means XWayland -- DISPLAY must point at
+            # it (typically ":1" via xwayland-satellite). Give a useful
+            # message instead of a bare "Failed to initialize GLFW".
+            if not os.environ.get("DISPLAY"):
+                raise RuntimeError(
+                    "DISPLAY is unset. This demo's GLFW build is X11-only, so "
+                    "it needs an X display (under Wayland, XWayland). On niri "
+                    "with xwayland-satellite the value is typically ':1'. "
+                    "Re-run as:  DISPLAY=:1 python examples/fork_demo/fork_demo.py"
+                )
+            self.window = spy.Window(
+                width=1600,
+                height=900,
+                title="fork demo",
+                resizable=True,
+            )
 
         self.device = spy.Device(
             enable_debug_layers=False,
             compiler_options={"include_paths": [EXAMPLE_DIR]},
         )
 
-        self.surface = self.device.create_surface(self.window)
-        self.surface.configure(width=self.window.width, height=self.window.height)
+        if not headless:
+            self.surface = self.device.create_surface(self.window)
+            self.surface.configure(width=self.window.width, height=self.window.height)
 
         # ------------------------------------------------------------------
         # UI context, fonts, style.
@@ -140,7 +163,8 @@ class ForkDemo:
         self._configure_style()
 
         # ------------------------------------------------------------------
-        # Progressive SDF path tracer. The kernel writes one new sample
+        # Progressive path tracer (analytic ray/primitive intersection).
+        # The kernel writes one new sample
         # per dispatch into g_accum (running mean) and a tonemapped
         # version into g_output. g_output is blitted to the surface --
         # the passthru central node makes it the visible backdrop.
@@ -154,6 +178,8 @@ class ForkDemo:
         self.pt_width = 1280
         self.pt_height = 720
         self.render_scale = 0.55
+        self.exposure = 1.0  # post-accumulation tonemap exposure
+        self.animate = True  # advance the scene clock (toggled from the overlay)
         self.pixel_budget = 500_000  # ~707x707; ~20ms / frame with NEE
         self.scene_texture: Optional[spy.Texture] = None  # tonemapped output
         self.accum_texture: Optional[spy.Texture] = None  # running mean
@@ -182,11 +208,12 @@ class ForkDemo:
         # telemetry state needed.
 
         # ------------------------------------------------------------------
-        # Event wiring.
+        # Event wiring (only with a real window).
         # ------------------------------------------------------------------
-        self.window.on_keyboard_event = self._on_keyboard_event
-        self.window.on_mouse_event = self._on_mouse_event
-        self.window.on_resize = self._on_resize
+        if not headless:
+            self.window.on_keyboard_event = self._on_keyboard_event
+            self.window.on_mouse_event = self._on_mouse_event
+            self.window.on_resize = self._on_resize
         self._terminate = False
 
         # ------------------------------------------------------------------
@@ -203,13 +230,27 @@ class ForkDemo:
     # ---------------------------------------------------------------- fonts
 
     def _register_fonts(self) -> None:
-        """Register fonts that exist; mark the body font as default."""
+        """Register fonts that exist; mark the body font as default. If an
+        icon font is found, merge it into the body font so icon glyphs can
+        be used inline in labels (add_font(merge=True))."""
+        self.has_icons = False
         body = _first_existing(FONT_CANDIDATES["body"])
         header = _first_existing(FONT_CANDIDATES["header"])
         if body is not None:
             self.ui.add_font("body", body, FONT_BODY_SIZE, is_default=True)
+            # Merge the icon font into the body font just registered. Merge
+            # only makes sense once a base font exists, so it is nested here.
+            icons = _first_existing(ICON_FONT_CANDIDATES)
+            if icons is not None:
+                self.ui.add_font("icons", icons, FONT_BODY_SIZE, merge=True)
+                self.has_icons = True
         if header is not None:
             self.ui.add_font("header", header, FONT_HEADER_SIZE)
+
+    def _label(self, icon: str, text: str) -> str:
+        """Prefix `text` with `icon` glyph when an icon font is loaded,
+        else return the plain text."""
+        return f"{icon}  {text}" if self.has_icons else text
 
     # ---------------------------------------------------------------- style
 
@@ -233,6 +274,10 @@ class ForkDemo:
         s.tab_rounding = 4.0
         s.scrollbar_size = 0.0  # hide the gutter entirely
         s.scrollbar_rounding = 0.0
+        # Flat, borderless surfaces (the rcgp-samples look): rounding does
+        # the shaping, no 1px outlines on windows or frames.
+        s.window_border_size = 0.0
+        s.frame_border_size = 0.0
 
         # ----- Nord colour assignments ---------------------------------
         # Backgrounds (Polar Night)
@@ -277,12 +322,18 @@ class ForkDemo:
         s.set_color(spy.ui.Col.resize_grip_hovered, _c(NORD9, 0.70))
         s.set_color(spy.ui.Col.resize_grip_active, _c(NORD8))
 
-        # Tabs
+        # Tabs. The selected tab of the *focused* dock node gets the bright
+        # accent fill plus a thick bright overline stripe on top; when the
+        # node loses focus its selected tab drops to a dark tone with no
+        # stripe, so the focused panel is unmistakable.
+        s.tab_bar_overline_size = 4.0
         s.set_color(spy.ui.Col.tab, _c(NORD1))
         s.set_color(spy.ui.Col.tab_hovered, _c(NORD3))
         s.set_color(spy.ui.Col.tab_selected, _c(NORD10))
-        s.set_color(spy.ui.Col.tab_dimmed, _c(NORD1, 0.80))
-        s.set_color(spy.ui.Col.tab_dimmed_selected, _c(NORD10, 0.80))
+        s.set_color(spy.ui.Col.tab_selected_overline, _c(NORD8))
+        s.set_color(spy.ui.Col.tab_dimmed, _c(NORD0))
+        s.set_color(spy.ui.Col.tab_dimmed_selected, _c(NORD1))
+        s.set_color(spy.ui.Col.tab_dimmed_selected_overline, _c(NORD1))
 
         # Docking
         s.set_color(spy.ui.Col.docking_preview, _c(NORD10, 0.70))
@@ -320,20 +371,27 @@ class ForkDemo:
         self.dock = spy.ui.DockSpace(screen)
         self.dock.passthru_central_node = False
 
-        # Controls panel: a normal titled window, docked to the left
-        # node. Title makes it obviously a window; the fork's
-        # show_title_bar=False feature is still exercised by the other
-        # demo windows when you collapse them via the [v] arrow.
-        self.left_window = spy.ui.Window(screen, "controls", size=spy.float2(400, 900))
+        # Left-side panels, each its own dock window (all tabbed into the
+        # left node by _try_apply_layout; drag tabs to split them apart):
+        #   performance  -- smoothed frame-time telemetry
+        #   scene inspector -- nested scene tree (built below)
+        self.perf_window = spy.ui.Window(screen, "Performance", size=spy.float2(400, 900))
         # Dedicated viewport window holding the ui.Image of the
         # path-tracer output. Docked to the right node so it fills the
         # entire right side of the layout. Mouse drag inside this
         # window's area drives the camera.
         self.viewport_window = spy.ui.Window(
             screen,
-            "viewport",
+            "Viewport",
             position=spy.float2(440, 30),
             size=spy.float2(1100, 900),
+        )
+        # Scene inspector: its own window holding the nested scene tree,
+        # docked as a tab alongside `controls` (see _try_apply_layout).
+        self.inspector_window = spy.ui.Window(
+            screen,
+            "Scene Inspector",
+            size=spy.float2(400, 900),
         )
 
         # -- left controls ------------------------------------------------
@@ -342,71 +400,42 @@ class ForkDemo:
         def _reset(*_: object) -> None:
             self.sample_count = 0
 
-        # ----- group: rendering ---------------------------------------
-        rendering = spy.ui.Group(self.left_window, "rendering")
-        # When animate=True, the scene clock advances and accumulation
-        # is reset every frame (1-spp motion). Untick to pause the
-        # clock and let the path tracer converge.
-        self.animate = spy.ui.CheckBox(rendering, "animate", value=True)
-        # Exposure is post-accumulation, so no reset callback.
-        self.exposure = spy.ui.SliderFloat(
-            rendering,
-            "exposure",
-            value=1.0,
-            min=0.1,
-            max=5.0,
-        )
-
-        # Render-scale changes the PT target resolution; reallocating
-        # the texture will reset the accumulator regardless, but make
-        # it explicit so the slider feels responsive.
-        def _set_scale(v: float) -> None:
-            self.render_scale = v
-            self.sample_count = 0
-
-        self.render_scale_slider = spy.ui.SliderFloat(
-            rendering,
-            "render scale",
-            value=self.render_scale,
-            min=0.25,
-            max=1.0,
-            callback=_set_scale,
-        )
-        spy.ui.Button(rendering, "reset accumulation", callback=_reset)
-        spy.ui.Button(rendering, "save screenshot", callback=self._save_screenshot)
-
-        # ----- scene tree (nested TreeNodes) --------------------------
-        # A scene-graph mirror of the SDF scene in scene.slang. TreeNode
+        # ----- scene inspector (own dock panel) -----------------------
+        # A scene-graph mirror of the scene in scene.slang lives in
+        # its own window, docked as a tab alongside `controls`. TreeNode
         # widgets nest arbitrarily: a TreeNode parented to another
         # TreeNode renders indented inside it (ImGui TreeNodeEx/TreePop).
         # The leaves are live controls, so editing the tree drives the
         # path tracer and resets accumulation via _reset.
-        scene = spy.ui.TreeNode(self.left_window, "scene", open=True)
+        scene = spy.ui.TreeNode(self.inspector_window, "Scene", open=True)
 
         # geometry/
-        geometry = spy.ui.TreeNode(scene, "geometry", open=True)
+        geometry = spy.ui.TreeNode(scene, "Geometry", open=True)
 
-        orbiting = spy.ui.TreeNode(geometry, "orbiting spheres")
+        orbiting = spy.ui.TreeNode(geometry, "Orbiting Spheres", open=True)
         self.tint = spy.ui.ColorPicker3(
             orbiting,
-            "tint sphere",
+            "Tint Sphere",
             value=spy.float3(NORD8[0], NORD8[1], NORD8[2]),
             callback=_reset,
         )
-        spy.ui.Text(orbiting, "+ 2 fixed diffuse spheres")
+        spy.ui.Text(orbiting, "3 orbiting (ray-sphere)")
 
-        mirror = spy.ui.TreeNode(geometry, "mirror sphere")
-        spy.ui.Text(mirror, "metal . bobbing")
+        mirror = spy.ui.TreeNode(geometry, "Mirror Sphere", open=True)
+        spy.ui.Text(mirror, "Metal, bobbing")
 
-        back_row = spy.ui.TreeNode(geometry, "back row")
+        glass = spy.ui.TreeNode(geometry, "Glass Spheres", open=True)
+        spy.ui.Text(glass, "2 refractive (dielectric, IOR 1.5)")
+
+        back_row = spy.ui.TreeNode(geometry, "Back Row", open=True)
         spy.ui.Text(back_row, "5 x diffuse")
 
         # lights/  -- one intensity multiplier per light. 1.0 keeps the
         # shader's baked-in intensity; 0.0 turns the light off entirely.
-        lights = spy.ui.TreeNode(scene, "lights", open=True)
+        lights = spy.ui.TreeNode(scene, "Lights", open=True)
         self.light_warm = spy.ui.SliderFloat(
             lights,
-            "warm",
+            "Warm",
             value=1.0,
             min=0.0,
             max=3.0,
@@ -414,7 +443,7 @@ class ForkDemo:
         )
         self.light_cool = spy.ui.SliderFloat(
             lights,
-            "cool",
+            "Cool",
             value=1.0,
             min=0.0,
             max=3.0,
@@ -422,7 +451,7 @@ class ForkDemo:
         )
         self.light_pink = spy.ui.SliderFloat(
             lights,
-            "pink",
+            "Pink",
             value=1.0,
             min=0.0,
             max=3.0,
@@ -430,7 +459,7 @@ class ForkDemo:
         )
         self.light_lime = spy.ui.SliderFloat(
             lights,
-            "lime",
+            "Lime",
             value=1.0,
             min=0.0,
             max=3.0,
@@ -438,64 +467,89 @@ class ForkDemo:
         )
 
         # environment/
-        environment = spy.ui.TreeNode(scene, "environment")
+        environment = spy.ui.TreeNode(scene, "Environment", open=True)
         self.background = spy.ui.ColorEdit4(
             environment,
-            "sky / ambient",
+            "Sky / Ambient",
             value=spy.float4(0.0, 0.0, 0.0, 1.0),
             callback=_reset,
         )
-        spy.ui.Text(environment, "ground plane")
+        spy.ui.Text(environment, "Ground plane")
 
-        # ----- tree node: advanced (collapsible, open by default) -----
-        advanced = spy.ui.TreeNode(self.left_window, "advanced", open=True)
-        self.gamma = spy.ui.SliderFloat(
-            advanced,
-            "gamma",
-            value=2.2,
-            min=1.0,
-            max=3.0,
-            callback=_reset,
+        # ===== window: performance ====================================
+        # Frame-time history shown as a bar-group chart (ImPlot
+        # PlotBarGroups): one "ms" series with FRAME_BARS columns, the
+        # most recent frame on the right. Rolling buffer lives in
+        # self._frame_ms and is pushed every frame in run(); values are
+        # exponentially smoothed (self._frame_ms_ema) so the bars don't
+        # flicker frame-to-frame.
+        self._frame_ms = [0.0] * FRAME_BARS
+        self._frame_ms_ema = 0.0
+        # ImPlot routes size through ImGui::CalcItemSize: a 0 component
+        # means "use the default size" (~400x300), NOT fill. A negative
+        # component fills the available region (avail - |value|). So
+        # x=-1 stretches to the panel width; height stays a sane fixed
+        # value so the chart is wide rather than tall.
+        self.frame_plot = spy.ui.Plot(
+            self.perf_window,
+            label="Frame Time",
+            y_label="ms",
+            size=spy.float2(-1, -1),
         )
-        self.exposure = spy.ui.SliderFloat(
-            advanced,
-            "exposure",
-            value=1.0,
-            min=0.1,
-            max=4.0,
-            callback=_reset,
-        )
-
-        # ----- group: stats -------------------------------------------
-        stats = spy.ui.Group(self.left_window, "stats")
-        self.fps_text = spy.ui.Text(stats, "FPS: --")
-        self.spp_text = spy.ui.Text(stats, "samples: 0")
-        self.size_text = spy.ui.Text(stats, "render: -- x --")
-        self.spark = spy.ui.PlotLines(
-            stats,
-            label="ms",
-            values=[0.0] * 120,
-            overlay="frame ms",
-            size=spy.float2(0, 60),
-        )
-
-        # ----- key hints (outside groups) ----------------------------
-        spy.ui.Separator(self.left_window)
-        spy.ui.Text(
-            self.left_window,
-            "LMB drag: rotate    MMB/RMB drag: pan    wheel: zoom",
-        )
-        spy.ui.Text(
-            self.left_window,
-            "Space: play/pause    F1: reset dock layout    Esc: quit",
-        )
+        self.frame_plot.add_bar_groups(["ms"], [self._frame_ms])
 
         # -- viewport panel: ui.Image of the path-traced output ---------
+        # size=(0,0) + zero padding fills the window edge-to-edge. (Trade-off:
+        # the image covers the window's rounded bottom corners and the inner
+        # part of the floating resize grip, which ImGui draws under content.)
+        self.viewport_window.padding = spy.float2(0.0, 0.0)
         self.viewport_image = spy.ui.Image(
             self.viewport_window,
             texture=None,
-            size=spy.float2(self.pt_width, self.pt_height),
+            size=spy.float2(0.0, 0.0),
         )
+
+        # ===== viewport action toolbar (overlaid on the image) ========
+        # The toolbar lives INSIDE the viewport window: ui.CursorPos rewinds
+        # the draw cursor back to the top-left after the image, so these
+        # bordered FontAwesome buttons draw on top of it. Being in the same
+        # window, they stay with the viewport whether docked or floating
+        # (no separate-window z-order issues). The toggle glyph swaps to
+        # reflect play/pause. Camera drag ignores clicks that land on a
+        # button (see _click_targets_viewport + is_any_item_hovered).
+        def _toggle_animate(*_: object) -> None:
+            self.animate = not self.animate
+            if not self.animate:
+                self.sample_count = 0
+
+        spy.ui.CursorPos(self.viewport_window, spy.float2(12.0, 12.0))
+        self.toggle_btn = spy.ui.Button(
+            self.viewport_window,
+            ICON_PAUSE if self.has_icons else "||",
+            callback=_toggle_animate,
+            border=True,
+        )
+        spy.ui.SameLine(self.viewport_window)
+        spy.ui.Button(
+            self.viewport_window,
+            ICON_RESET if self.has_icons else "R",
+            callback=_reset,
+            border=True,
+        )
+        spy.ui.SameLine(self.viewport_window)
+        spy.ui.Button(
+            self.viewport_window,
+            ICON_CAMERA if self.has_icons else "S",
+            callback=self._save_screenshot,
+            border=True,
+        )
+
+        # Sample-count readout as a button-style chip pinned to the top-right
+        # corner of the viewport. The CursorPos is repositioned each frame in
+        # run() (content_size - chip width) to keep it flush-right, and the
+        # chip label is updated there too. No callback -- it's a readout.
+        self._spp_cursor = spy.ui.CursorPos(self.viewport_window, spy.float2(0.0, 12.0))
+        self.spp_chip = spy.ui.Button(self.viewport_window, "Samples: 0", border=True)
 
     # -------------------------------------------------------- dock assignment
 
@@ -508,7 +562,10 @@ class ForkDemo:
         right = self.dock.right_dock_id
         if left == 0 or right == 0:
             return
-        self.left_window.dock_id = left
+        # All left-side panels share the left node, so they dock as tabs.
+        # Drag a tab out to split it off.
+        self.perf_window.dock_id = left
+        self.inspector_window.dock_id = left
         # Viewport fills the right side completely; phases /
         # distribution stay floating on top.
         self.viewport_window.dock_id = right
@@ -523,12 +580,11 @@ class ForkDemo:
             if event.key == spy.KeyCode.escape:
                 self._terminate = True
             elif event.key == spy.KeyCode.space:
-                # Toggle the animate checkbox. When pausing, also reset
-                # the accumulator so the freshly-frozen scene converges
-                # from scratch rather than blending with the prior
-                # animated samples.
-                self.animate.value = not self.animate.value
-                if not self.animate.value:
+                # Toggle animation. When pausing, also reset the accumulator
+                # so the freshly-frozen scene converges from scratch rather
+                # than blending with the prior animated samples.
+                self.animate = not self.animate
+                if not self.animate:
                     self.sample_count = 0
             elif event.key == spy.KeyCode.f1:
                 # Reset dock layout: drop imgui.ini, re-request a split.
@@ -595,10 +651,26 @@ class ForkDemo:
         )
         if not in_image:
             return False
+        # Leave the bottom-right resize-grip corner to ImGui so a floating
+        # viewport can still be resized (the grip is ~1.5 * font size).
+        grip = 1.5 * FONT_BODY_SIZE
+        if px >= wp.x + ws.x - grip and py >= wp.y + ws.y - grip:
+            return False
+        # Reject if the cursor is over an interactive ImGui item -- this is
+        # how clicks on the viewport's own action toolbar (drawn over the
+        # image) reach the buttons instead of starting a camera drag. The
+        # inert ui.Image is not an item, so the rest of the image still
+        # drives the camera.
+        if self.ui.is_any_item_hovered():
+            return False
         # Reject if any other panel covers the cursor -- avoids
         # camera-grabbing a click that's targeting that panel.
-        if self._rect_contains(self.left_window, px, py):
-            return False
+        for panel in (
+            self.perf_window,
+            self.inspector_window,
+        ):
+            if self._rect_contains(panel, px, py):
+                return False
         return True
 
     def _on_mouse_event(self, event: spy.MouseEvent) -> None:
@@ -698,11 +770,11 @@ class ForkDemo:
         except Exception as e:
             print(f"[fork_demo] screenshot failed: {e}")
 
-    def _ensure_pt_textures(self, pt_w: int, pt_h: int, disp_w: float, disp_h: float) -> None:
-        """Allocate / reallocate the path-tracer's textures so the
-        render target is `(pt_w, pt_h)` pixels, and size the ui.Image
-        widget to `(disp_w, disp_h)` so it fills the window content
-        area. Triggers an accumulation reset on render-target resize."""
+    def _ensure_pt_textures(self, pt_w: int, pt_h: int) -> None:
+        """Allocate / reallocate the path-tracer's textures so the render
+        target is `(pt_w, pt_h)` pixels. The ui.Image fills the window
+        content region on its own (size=(0,0)). Triggers an accumulation
+        reset on render-target resize."""
         needs_remake = (
             self.scene_texture is None
             or self.scene_texture.width != pt_w
@@ -728,14 +800,98 @@ class ForkDemo:
             self.pt_width = pt_w
             self.pt_height = pt_h
             self.sample_count = 0
-        # Always sync the display size -- the image stretches the
-        # (lower-res) PT texture across the full window content area.
-        self.viewport_image.size = spy.float2(disp_w, disp_h)
+
+    def _dispatch_scene(self, command_encoder: "spy.CommandEncoder", g_time: float) -> None:
+        """Run one path-tracer sample into scene_texture/accum_texture."""
+        cam_pos, cam_right, cam_up, cam_fwd = self._camera_basis()
+        self.kernel.dispatch(
+            thread_count=[self.pt_width, self.pt_height, 1],
+            vars={
+                "g_output": self.scene_texture,
+                "g_accum": self.accum_texture,
+                "g_frame": self.sample_count,
+                "g_sample_count": self.sample_count,
+                "g_time": g_time,
+                "g_tint": self.tint.value,
+                "g_sky": self.background.value,
+                "g_exposure": self.exposure,
+                "g_cam_pos": cam_pos,
+                "g_cam_right": cam_right,
+                "g_cam_up": cam_up,
+                "g_cam_forward": cam_fwd,
+                "g_focal": self.focal,
+                "g_light_intensity": spy.float4(
+                    self.light_warm.value,
+                    self.light_cool.value,
+                    self.light_pink.value,
+                    self.light_lime.value,
+                ),
+            },
+            command_encoder=command_encoder,
+        )
+
+    def _size_pt_to_viewport(self) -> None:
+        """Size the PT render target to the viewport's content area."""
+        content = self.viewport_window.content_size
+        disp_w = max(64.0, content.x)
+        disp_h = max(64.0, content.y)
+        pt_w = max(64, int(disp_w * self.render_scale))
+        pt_h = max(64, int(disp_h * self.render_scale))
+        if pt_w * pt_h > self.pixel_budget:
+            s = (self.pixel_budget / float(pt_w * pt_h)) ** 0.5
+            pt_w = max(64, int(pt_w * s))
+            pt_h = max(64, int(pt_h * s))
+        self._ensure_pt_textures(pt_w, pt_h)
+
+    def _update_spp_chip(self) -> None:
+        """Refresh the top-right sample-count chip label + position."""
+        spp_label = f"Samples: {self.sample_count}"
+        self.spp_chip.label = spp_label
+        chip_w = self.ui.calc_text_size(spp_label).x + 2.0 * self.ui.style.frame_padding.x
+        self._spp_cursor.pos = spy.float2(
+            max(12.0, self.viewport_window.content_size.x - chip_w - 12.0), 12.0
+        )
+
+    def render_headless(
+        self,
+        width: int = 1600,
+        height: int = 900,
+        frames: int = 16,
+        out_path: str = "fork_demo_headless.png",
+    ) -> None:
+        """Render the UI to an offscreen texture (no OS window) and write a
+        PNG. Runs a few frames so the dock layout settles and the path tracer
+        accumulates, then saves the final composite for inspection."""
+        target = self.device.create_texture(
+            format=spy.Format.rgba8_unorm,
+            width=width,
+            height=height,
+            usage=spy.TextureUsage.render_target | spy.TextureUsage.shader_resource,
+            label="headless_target",
+        )
+
+        # Force a fresh dock split so the layout is deterministic.
+        self._needs_layout = True
+        self.dock.request_split_horizontal(0.27)
+
+        for f in range(frames):
+            ce = self.device.create_command_encoder()
+            self._size_pt_to_viewport()
+            self.sample_count += 1
+            self._update_spp_chip()
+            self._dispatch_scene(ce, g_time=float(f) * 0.05)
+            self.ui.begin_frame(width, height)
+            self._try_apply_layout()
+            self.ui.end_frame(target, ce)
+            self.device.submit_command_buffer(ce.finish())
+
+        self.device.wait()
+        target.to_bitmap().write(out_path)
+        print(f"[fork_demo] headless screenshot ({width}x{height}, {frames} frames) -> {out_path}")
 
     def run(self) -> None:
         t_start = time.perf_counter()
         last_frame = t_start
-        fps_avg = 0.0
         frame_counter = 0
 
         # The body font registered with is_default=True is automatically
@@ -762,45 +918,63 @@ class ForkDemo:
             dt_ms = dt * 1000.0
             t_total = now - t_start
 
-            self.spark.push_value(dt_ms)
-            fps_avg = 0.05 * (1.0 / max(dt, 1e-6)) + 0.95 * fps_avg
-            self.fps_text.text = f"FPS: {fps_avg:5.1f}    ({dt_ms:5.2f} ms)"
+            # Exponential moving average smooths the per-frame jitter
+            # before it goes into the bar chart (lower alpha = smoother).
+            self._frame_ms_ema = (
+                dt_ms if frame_counter == 0 else 0.06 * dt_ms + 0.94 * self._frame_ms_ema
+            )
+            self._frame_ms.append(self._frame_ms_ema)
+            del self._frame_ms[:-FRAME_BARS]
+            self.frame_plot.add_bar_groups(["ms"], [self._frame_ms])
 
             # ---- compute (path-tracer sample) ----
             command_encoder = self.device.create_command_encoder()
-            # Compute the viewport's content area, then size the PT
-            # render target to `content * render_scale`, capped at the
-            # pixel budget. The ui.Image stretches the texture to fill
-            # the full content area.
-            wsize = self.viewport_window.size
-            disp_w = max(64.0, wsize.x - 24.0)
-            disp_h = max(64.0, wsize.y - 44.0)
+            # Size the PT render target to `content_size * render_scale`,
+            # capped at the pixel budget. content_size is the viewport
+            # window's actual inner area (captured last render); the
+            # ui.Image stretches the texture to fill it.
+            content = self.viewport_window.content_size
+            disp_w = max(64.0, content.x)
+            disp_h = max(64.0, content.y)
             pt_w = max(64, int(disp_w * self.render_scale))
             pt_h = max(64, int(disp_h * self.render_scale))
             if pt_w * pt_h > self.pixel_budget:
                 s = (self.pixel_budget / float(pt_w * pt_h)) ** 0.5
                 pt_w = max(64, int(pt_w * s))
                 pt_h = max(64, int(pt_h * s))
-            self._ensure_pt_textures(pt_w, pt_h, disp_w, disp_h)
+            self._ensure_pt_textures(pt_w, pt_h)
             assert self.scene_texture is not None and self.accum_texture is not None
 
             tint = self.tint.value
             sky = self.background.value
-            exposure = self.exposure.value
+            exposure = self.exposure
             cam_pos, cam_right, cam_up, cam_fwd = self._camera_basis()
 
             # Scene clock: advance when animate is on (and force a
             # fresh sample so motion shows), else freeze and let the
             # accumulator converge on the paused snapshot.
-            animate = self.animate.value
+            animate = self.animate
             if animate:
                 self.t_freeze = t_total
                 self.sample_count = 0
             g_time = t_total if animate else self.t_freeze
 
+            # Reflect play/pause state in the toolbar button: "pause" glyph
+            # while playing, "play" glyph while paused.
+            if self.has_icons:
+                self.toggle_btn.label = ICON_PAUSE if animate else ICON_PLAY
+
             self.sample_count += 1
-            self.spp_text.text = f"samples: {self.sample_count}"
-            self.size_text.text = f"render: {self.pt_width} x {self.pt_height}"
+            # Update the top-right sample-count chip, kept a fixed 12px from
+            # the viewport's right edge (same inset as the left toolbar).
+            # Chip width = measured text width + button frame padding on both
+            # sides, so the right gap is exact regardless of the digit count.
+            spp_label = f"Samples: {self.sample_count}"
+            self.spp_chip.label = spp_label
+            chip_w = self.ui.calc_text_size(spp_label).x + 2.0 * self.ui.style.frame_padding.x
+            self._spp_cursor.pos = spy.float2(
+                max(12.0, self.viewport_window.content_size.x - chip_w - 12.0), 12.0
+            )
 
             self.kernel.dispatch(
                 thread_count=[self.pt_width, self.pt_height, 1],
@@ -845,6 +1019,29 @@ class ForkDemo:
 
 
 def main() -> None:
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Fork feature demo")
+    parser.add_argument(
+        "--headless",
+        nargs="?",
+        const="fork_demo_headless.png",
+        default=None,
+        metavar="PATH",
+        help="Render the UI offscreen (no window) and save a PNG to PATH, then exit.",
+    )
+    parser.add_argument("--frames", type=int, default=16, help="Headless: frames to accumulate.")
+    parser.add_argument("--width", type=int, default=1600, help="Headless: image width.")
+    parser.add_argument("--height", type=int, default=900, help="Headless: image height.")
+    args = parser.parse_args()
+
+    if args.headless is not None:
+        demo = ForkDemo(headless=True)
+        demo.render_headless(
+            width=args.width, height=args.height, frames=args.frames, out_path=args.headless
+        )
+        return
+
     demo = ForkDemo()
     demo.run()
 

@@ -177,12 +177,13 @@ SGL_PY_EXPORT(ui_widgets)
 
     nb::class_<ui::Window, Widget>(ui, "Window", D(Window))
         .def(
-            nb::init<Widget*, std::string_view, float2, float2, bool>(),
+            nb::init<Widget*, std::string_view, float2, float2, bool, bool>(),
             "parent"_a.none(),
             "title"_a = "",
             "position"_a = float2(10.f, 10.f),
             "size"_a = float2(400.f, 400.f),
             "show_title_bar"_a = true,
+            "overlay"_a = false,
             D(Window, Window)
         )
         .def("show", &ui::Window::show, D(Window, show))
@@ -191,7 +192,10 @@ SGL_PY_EXPORT(ui_widgets)
         .def_prop_rw("position", &ui::Window::position, &ui::Window::set_position, D(Window, position))
         .def_prop_rw("size", &ui::Window::size, &ui::Window::set_size, D(Window, size))
         .def_prop_rw("dock_id", &ui::Window::dock_id, &ui::Window::set_dock_id)
-        .def_prop_rw("show_title_bar", &ui::Window::show_title_bar, &ui::Window::set_show_title_bar);
+        .def_prop_rw("show_title_bar", &ui::Window::show_title_bar, &ui::Window::set_show_title_bar)
+        .def_prop_rw("overlay", &ui::Window::overlay, &ui::Window::set_overlay)
+        .def_prop_rw("padding", &ui::Window::padding, &ui::Window::set_padding)
+        .def_prop_ro("content_size", &ui::Window::content_size);
 
     nb::class_<Group, Widget>(ui, "Group")
         .def(nb::init<Widget*, std::string_view>(), "parent"_a.none(), "label"_a = "", D(Group, Group))
@@ -216,15 +220,28 @@ SGL_PY_EXPORT(ui_widgets)
 
     nb::class_<Button, Widget>(ui, "Button", D(Button))
         .def(
-            nb::init<Widget*, std::string_view, Button::Callback>(),
+            nb::init<Widget*, std::string_view, Button::Callback, bool, bool>(),
             "parent"_a.none(),
             "label"_a = "",
             "callback"_a = Button::Callback{},
+            "active"_a = false,
+            "border"_a = false,
             D(Button, Button)
         )
         .def_prop_rw("label", &Button::label, &Button::set_label, D(Button, label))
         .def_prop_rw("callback", &Button::callback, &Button::set_callback, D(Button, callback))
+        .def_prop_rw("active", &Button::active, &Button::set_active)
+        .def_prop_rw("border", &Button::border, &Button::set_border)
         .def("_get_callback", &Button::callback);
+
+    nb::class_<SameLine, Widget>(ui, "SameLine")
+        .def(nb::init<Widget*, float, float>(), "parent"_a.none(), "offset_x"_a = 0.f, "spacing"_a = -1.f)
+        .def_prop_rw("offset_x", &SameLine::offset_x, &SameLine::set_offset_x)
+        .def_prop_rw("spacing", &SameLine::spacing, &SameLine::set_spacing);
+
+    nb::class_<CursorPos, Widget>(ui, "CursorPos")
+        .def(nb::init<Widget*, float2>(), "parent"_a.none(), "pos"_a = float2(0.f, 0.f))
+        .def_prop_rw("pos", &CursorPos::pos, &CursorPos::set_pos);
 
     bind_value_property<ValueProperty<bool>>(ui, "ValuePropertyBool");
     bind_value_property<ValueProperty<int>>(ui, "ValuePropertyInt");
@@ -359,6 +376,23 @@ SGL_PY_EXPORT(ui_widgets)
         .def_prop_rw("size", &Image::size, &Image::set_size)
         .def_prop_rw("uv0", &Image::uv0, &Image::set_uv0)
         .def_prop_rw("uv1", &Image::uv1, &Image::set_uv1);
+
+    nb::class_<ImageButton, Widget>(ui, "ImageButton")
+        .def(
+            nb::init<Widget*, ref<Texture>, float2, ImageButton::Callback, float2, float2>(),
+            "parent"_a.none(),
+            "texture"_a = nb::none(),
+            "size"_a = float2(0.f, 0.f),
+            "callback"_a = ImageButton::Callback{},
+            "uv0"_a = float2(0.f, 0.f),
+            "uv1"_a = float2(1.f, 1.f)
+        )
+        .def_prop_rw("texture", &ImageButton::texture, &ImageButton::set_texture)
+        .def_prop_rw("size", &ImageButton::size, &ImageButton::set_size)
+        .def_prop_rw("uv0", &ImageButton::uv0, &ImageButton::set_uv0)
+        .def_prop_rw("uv1", &ImageButton::uv1, &ImageButton::set_uv1)
+        .def_prop_rw("callback", &ImageButton::callback, &ImageButton::set_callback)
+        .def("_get_callback", &ImageButton::callback);
 
     nb::class_<PlotLines, Widget>(ui, "PlotLines")
         .def(

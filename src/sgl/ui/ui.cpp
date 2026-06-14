@@ -88,21 +88,36 @@ void Style::set_color(Col c, float4 v)
 // Scalar field accessors -- each one is one read or one write of an
 // ImGuiStyle field. Field name on the ImGui side is the camelCase form
 // of the snake_case method name (e.g. window_padding -> WindowPadding).
-#define SGL_UI_STYLE_FLOAT_IMPL(name, ImGuiField)                                \
-    float Style::name() const { return imgui_style().ImGuiField; }               \
-    void Style::set_##name(float v) { imgui_style().ImGuiField = v; }
+#define SGL_UI_STYLE_FLOAT_IMPL(name, ImGuiField)                                                                      \
+    float Style::name() const                                                                                          \
+    {                                                                                                                  \
+        return imgui_style().ImGuiField;                                                                               \
+    }                                                                                                                  \
+    void Style::set_##name(float v)                                                                                    \
+    {                                                                                                                  \
+        imgui_style().ImGuiField = v;                                                                                  \
+    }
 
-#define SGL_UI_STYLE_VEC2_IMPL(name, ImGuiField)                                 \
-    float2 Style::name() const                                                   \
-    {                                                                            \
-        const ImVec2& v = imgui_style().ImGuiField;                              \
-        return float2(v.x, v.y);                                                 \
-    }                                                                            \
-    void Style::set_##name(float2 v) { imgui_style().ImGuiField = ImVec2(v.x, v.y); }
+#define SGL_UI_STYLE_VEC2_IMPL(name, ImGuiField)                                                                       \
+    float2 Style::name() const                                                                                         \
+    {                                                                                                                  \
+        const ImVec2& v = imgui_style().ImGuiField;                                                                    \
+        return float2(v.x, v.y);                                                                                       \
+    }                                                                                                                  \
+    void Style::set_##name(float2 v)                                                                                   \
+    {                                                                                                                  \
+        imgui_style().ImGuiField = ImVec2(v.x, v.y);                                                                   \
+    }
 
-#define SGL_UI_STYLE_BOOL_IMPL(name, ImGuiField)                                 \
-    bool Style::name() const { return imgui_style().ImGuiField; }                \
-    void Style::set_##name(bool v) { imgui_style().ImGuiField = v; }
+#define SGL_UI_STYLE_BOOL_IMPL(name, ImGuiField)                                                                       \
+    bool Style::name() const                                                                                           \
+    {                                                                                                                  \
+        return imgui_style().ImGuiField;                                                                               \
+    }                                                                                                                  \
+    void Style::set_##name(bool v)                                                                                     \
+    {                                                                                                                  \
+        imgui_style().ImGuiField = v;                                                                                  \
+    }
 
 SGL_UI_STYLE_FLOAT_IMPL(alpha, Alpha)
 SGL_UI_STYLE_FLOAT_IMPL(disabled_alpha, DisabledAlpha)
@@ -500,17 +515,22 @@ ImFont* Context::get_font(const char* name)
     return it == m_fonts.end() ? nullptr : it->second;
 }
 
-void Context::add_font(const char* name, const char* path, float size, bool is_default)
+void Context::add_font(const char* name, const char* path, float size, bool is_default, bool merge)
 {
     ImGui::SetCurrentContext(m_imgui_context);
     ImGuiIO& io = ImGui::GetIO();
-    ImFont* font = io.Fonts->AddFontFromFileTTF(path, size);
+    ImFontConfig font_config;
+    // MergeMode overlays this font's glyphs onto the previously added font,
+    // so an icon font fills in glyphs the body font lacks. (ImGui 1.92 loads
+    // glyphs on demand, so no explicit GlyphRanges are required.)
+    font_config.MergeMode = merge;
+    ImFont* font = io.Fonts->AddFontFromFileTTF(path, size, &font_config);
     if (!font) {
         log_warn("Context::add_font: failed to load '{}' from {}", name, path);
         return;
     }
     m_fonts[name] = font;
-    if (is_default)
+    if (is_default && !merge)
         io.FontDefault = font;
 }
 
@@ -526,6 +546,23 @@ void Context::pop_font()
 {
     ImGui::SetCurrentContext(m_imgui_context);
     ImGui::PopFont();
+}
+
+bool Context::is_any_item_hovered()
+{
+    ImGui::SetCurrentContext(m_imgui_context);
+    return ImGui::IsAnyItemHovered();
+}
+
+float2 Context::calc_text_size(const char* text)
+{
+    ImGui::SetCurrentContext(m_imgui_context);
+    // CalcTextSize dereferences the current font, which is only bound once
+    // a frame has started; guard so a pre-frame call can't crash.
+    if (ImGui::GetFrameCount() == 0)
+        return float2(0.f, 0.f);
+    ImVec2 s = ImGui::CalcTextSize(text);
+    return float2(s.x, s.y);
 }
 
 void Context::begin_frame(uint32_t width, uint32_t height, sgl::Window* window)

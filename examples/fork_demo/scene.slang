@@ -1,21 +1,24 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
-// Progressive SDF path tracer -- dense lit scene.
+// Progressive path tracer -- analytic ray/primitive intersection.
 //
-// Primitives:
-//   * ground plane
-//   * three orbiting Lambertian spheres (one user-tinted)
-//   * eight Lambertian pillars in a ring (alternating colours)
-//   * central rotating Lambertian box
-//   * Lambertian torus around the central box
-//   * bobbing perfect-mirror sphere above the centre
-//   * three floating, self-rotating Lambertian cubes
-//   * five small Lambertian back-row spheres
-//   * four animated emissive light spheres (warm / cool / pink / green)
+// (Previously this used SDF sphere-tracing; it now does classic ray
+// tracing with closed-form ray/primitive intersection tests.)
 //
-// Background is pitch black -- all illumination comes from the
-// emissive lights. Russian-roulette is left off; 5 bounces is enough
-// for a clean image in <300spp at this geometry.
+// Primitives (all analytic):
+//   * ground plane                     -- ray/plane
+//   * three orbiting diffuse spheres   -- ray/sphere (one user-tinted)
+//   * eight diffuse pillars in a ring  -- ray/oriented-box (axis-aligned)
+//   * central rotating diffuse box     -- ray/oriented-box (Y rotation)
+//   * bobbing perfect-mirror sphere    -- ray/sphere
+//   * three floating rotating cubes    -- ray/oriented-box (ZX rotation)
+//   * five small diffuse back spheres  -- ray/sphere
+//   * two refractive glass spheres     -- ray/sphere + dielectric BSDF
+//   * four animated emissive lights    -- ray/sphere
+//
+// Background is black -- all illumination comes from the emissive
+// lights. Diffuse surfaces use next-event estimation; mirror and glass
+// are handled as specular chains.
 
 RWTexture2D<float4> g_output;
 RWTexture2D<float4> g_accum;
@@ -49,33 +52,120 @@ float rand(inout RNG r)
     return float(r.state) / 4294967296.0;
 }
 
-// ================================================================ SDFs
-float sd_sphere(float3 p, float3 c, float r) { return length(p - c) - r; }
-float sd_plane_y(float3 p, float y)          { return p.y - y; }
-
-float sd_box(float3 p, float3 c, float3 b)
-{
-    float3 q = abs(p - c) - b;
-    return length(max(q, 0.0)) + min(max(q.x, max(q.y, q.z)), 0.0);
-}
-
-float sd_torus(float3 p, float R, float r)
-{
-    float2 q = float2(length(p.xz) - R, p.y);
-    return length(q) - r;
-}
-
+// =========================================================== transforms
 float3 rotate_y(float3 p, float a)
 {
     float ca = cos(a), sa = sin(a);
     return float3(ca * p.x + sa * p.z, p.y, -sa * p.x + ca * p.z);
 }
 
+float3 rotate_x(float3 p, float a)
+{
+    float ca = cos(a), sa = sin(a);
+    return float3(p.x, ca * p.y + sa * p.z, -sa * p.y + ca * p.z);
+}
+
+// Forward map used to take a world point into a cube's local frame:
+// first rotate about Y, then about X.
 float3 rotate_zx(float3 p, float ay, float ax)
 {
-    p = rotate_y(p, ay);
-    float ca = cos(ax), sa = sin(ax);
-    return float3(p.x, ca * p.y + sa * p.z, -sa * p.y + ca * p.z);
+    return rotate_x(rotate_y(p, ay), ax);
+}
+
+// Inverse of rotate_zx (transpose of an orthonormal rotation): undo the
+// X rotation, then the Y rotation. Used to map a local normal to world.
+float3 rotate_zx_inv(float3 p, float ay, float ax)
+{
+    return rotate_y(rotate_x(p, -ax), -ay);
+}
+
+// ===================================================== ray/primitive tests
+// Each test returns the nearest intersection with t > eps and writes the
+// hit distance `t` and the outward geometric normal `n`.
+
+static const float T_EPS = 1e-4;
+
+bool hit_sphere(float3 ro, float3 rd, float3 c, float r, out float t, out float3 n)
+{
+    t = 0.0;
+    n = float3(0.0, 0.0, 1.0);
+    float3 oc = ro - c;
+    float b = dot(oc, rd);
+    float k = dot(oc, oc) - r * r;
+    float disc = b * b - k;
+    if (disc < 0.0)
+        return false;
+    float s = sqrt(disc);
+    float t0 = -b - s;
+    float t1 = -b + s;
+    float tt = (t0 > T_EPS) ? t0 : ((t1 > T_EPS) ? t1 : -1.0);
+    if (tt < 0.0)
+        return false;
+    t = tt;
+    n = normalize((ro + rd * tt) - c);
+    return true;
+}
+
+bool hit_plane_y(float3 ro, float3 rd, float y, out float t, out float3 n)
+{
+    t = 0.0;
+    n = float3(0.0, 1.0, 0.0);
+    if (abs(rd.y) < 1e-6)
+        return false;
+    float tt = (y - ro.y) / rd.y;
+    if (tt < T_EPS)
+        return false;
+    t = tt;
+    return true;
+}
+
+// Slab test for an axis-aligned box [-b, b] centred at the origin.
+bool slab(float3 ro, float3 rd, float3 b, out float t, out float3 n)
+{
+    t = 0.0;
+    n = float3(0.0, 0.0, 1.0);
+    float3 d = rd;
+    d.x = (abs(d.x) < 1e-8) ? 1e-8 : d.x;
+    d.y = (abs(d.y) < 1e-8) ? 1e-8 : d.y;
+    d.z = (abs(d.z) < 1e-8) ? 1e-8 : d.z;
+    float3 inv = 1.0 / d;
+    float3 t0 = (-b - ro) * inv;
+    float3 t1 = (b - ro) * inv;
+    float3 tsm = min(t0, t1);
+    float3 tbg = max(t0, t1);
+    float tN = max(max(tsm.x, tsm.y), tsm.z);
+    float tF = min(min(tbg.x, tbg.y), tbg.z);
+    if (tN > tF || tF < T_EPS)
+        return false;
+    bool entry = tN > T_EPS;
+    t = entry ? tN : tF;
+    if (entry)
+        n = -sign(d) * float3(float(tN == tsm.x), float(tN == tsm.y), float(tN == tsm.z));
+    else
+        n = sign(d) * float3(float(tF == tbg.x), float(tF == tbg.y), float(tF == tbg.z));
+    n = normalize(n);
+    return true;
+}
+
+bool hit_aabb(float3 ro, float3 rd, float3 c, float3 b, out float t, out float3 n)
+{
+    return slab(ro - c, rd, b, t, n);
+}
+
+bool hit_obb_y(float3 ro, float3 rd, float3 c, float3 b, float a, out float t, out float3 n)
+{
+    float3 nL;
+    bool h = slab(rotate_y(ro - c, -a), rotate_y(rd, -a), b, t, nL);
+    n = rotate_y(nL, a);
+    return h;
+}
+
+bool hit_obb_zx(float3 ro, float3 rd, float3 c, float3 b, float ay, float ax, out float t, out float3 n)
+{
+    float3 nL;
+    bool h = slab(rotate_zx(ro - c, ay, ax), rotate_zx(rd, ay, ax), b, t, nL);
+    n = rotate_zx_inv(nL, ay, ax);
+    return h;
 }
 
 // ================================================================ scene
@@ -91,108 +181,99 @@ float3 rotate_zx(float3 p, float ay, float ax)
 //   8  pink light (emissive)
 //   9  lime light (emissive)
 //  10  back-row spheres (NORD8 cyan)
-//  11  torus (NORD12 orange)
 //  12  pillar even (NORD9 blue)
 //  13  pillar odd (NORD7 cyan-green)
 //  14  floating cubes (NORD15 magenta)
-float scene_sdf(float3 p, out int mat)
-{
-    float d = sd_plane_y(p, 0.0);
-    mat = 0;
+//  15  glass spheres (refractive dielectric)
 
-    // ---- 3 orbiting spheres ---------------------------------------
-    [unroll] for (int i = 0; i < 3; ++i) {
+struct Hit {
+    float  t;
+    float3 n;   // outward geometric normal
+    int    mat;
+};
+
+void consider(inout Hit best, bool did, float t, float3 n, int mat)
+{
+    if (did && t < best.t) {
+        best.t = t;
+        best.n = n;
+        best.mat = mat;
+    }
+}
+
+// Two refractive glass spheres (centre, radius). Shared by the
+// intersector and any code that wants to know where the glass is.
+float3 glass_center(int i) { return (i == 0) ? float3(1.05, 0.55, 0.30) : float3(-1.05, 0.42, 0.85); }
+float  glass_radius(int i) { return (i == 0) ? 0.45 : 0.30; }
+
+Hit scene_intersect(float3 ro, float3 rd)
+{
+    Hit best;
+    best.t = 1e30;
+    best.n = float3(0.0, 1.0, 0.0);
+    best.mat = -1;
+
+    float t;
+    float3 n;
+
+    // ground plane
+    consider(best, hit_plane_y(ro, rd, 0.0, t, n), t, n, 0);
+
+    // 3 orbiting spheres
+    [unroll]
+    for (int i = 0; i < 3; ++i) {
         float a = g_time * 0.55 + float(i) * 2.0944;
         float3 c = float3(1.55 * cos(a), 0.50, 1.55 * sin(a));
-        float di = sd_sphere(p, c, 0.36);
-        if (di < d) { d = di; mat = i + 1; }
+        consider(best, hit_sphere(ro, rd, c, 0.36, t, n), t, n, i + 1);
     }
 
-    // ---- central rotating box -------------------------------------
-    float3 box_c = float3(0.0, 0.55, 0.0);
-    float3 box_local = rotate_y(p - box_c, -g_time * 0.35);
-    float d_box = sd_box(box_local, float3(0.0), float3(0.24, 0.55, 0.24));
-    if (d_box < d) { d = d_box; mat = 4; }
+    // central rotating box
+    consider(best, hit_obb_y(ro, rd, float3(0.0, 0.55, 0.0), float3(0.24, 0.55, 0.24), -g_time * 0.35, t, n), t, n, 4);
 
-    // ---- torus around the centre ----------------------------------
-    float3 tp = p - float3(0.0, 0.60, 0.0);
-    float d_torus = sd_torus(tp, 1.00, 0.08);
-    if (d_torus < d) { d = d_torus; mat = 11; }
-
-    // ---- bobbing mirror sphere ------------------------------------
+    // bobbing mirror sphere
     float bob = 0.24 * sin(g_time * 1.4);
-    float d_mirror = sd_sphere(p, float3(0.0, 1.95 + bob, 0.0), 0.34);
-    if (d_mirror < d) { d = d_mirror; mat = 5; }
+    consider(best, hit_sphere(ro, rd, float3(0.0, 1.95 + bob, 0.0), 0.34, t, n), t, n, 5);
 
-    // ---- four emissive lights at compass corners ------------------
+    // 4 emissive lights at compass corners
     const float LR = 3.0;
-    float l1 = sd_sphere(p, float3( LR * 0.70, 1.50 + 0.30 * sin(g_time * 0.70),  LR * 0.70), 0.20);
-    if (l1 < d) { d = l1; mat = 6; }
-    float l2 = sd_sphere(p, float3(-LR * 0.70, 1.70 + 0.25 * cos(g_time * 0.90),  LR * 0.70), 0.20);
-    if (l2 < d) { d = l2; mat = 7; }
-    float l3 = sd_sphere(p, float3(-LR * 0.70, 1.40 + 0.35 * sin(g_time * 0.60 + 1.5), -LR * 0.70), 0.20);
-    if (l3 < d) { d = l3; mat = 8; }
-    float l4 = sd_sphere(p, float3( LR * 0.70, 1.60 + 0.30 * cos(g_time * 0.80 + 2.1), -LR * 0.70), 0.20);
-    if (l4 < d) { d = l4; mat = 9; }
+    consider(best, hit_sphere(ro, rd, float3(LR * 0.70, 1.50 + 0.30 * sin(g_time * 0.70), LR * 0.70), 0.20, t, n), t, n, 6);
+    consider(best, hit_sphere(ro, rd, float3(-LR * 0.70, 1.70 + 0.25 * cos(g_time * 0.90), LR * 0.70), 0.20, t, n), t, n, 7);
+    consider(best, hit_sphere(ro, rd, float3(-LR * 0.70, 1.40 + 0.35 * sin(g_time * 0.60 + 1.5), -LR * 0.70), 0.20, t, n), t, n, 8);
+    consider(best, hit_sphere(ro, rd, float3(LR * 0.70, 1.60 + 0.30 * cos(g_time * 0.80 + 2.1), -LR * 0.70), 0.20, t, n), t, n, 9);
 
-    // ---- 8 pillars in a ring --------------------------------------
+    // 8 pillars in a ring
     const float PR = 2.30;
-    [unroll] for (int k = 0; k < 8; ++k) {
+    [unroll]
+    for (int k = 0; k < 8; ++k) {
         float ang = float(k) * 0.78539816;   // pi/4
         float3 pc = float3(PR * cos(ang), 0.0, PR * sin(ang));
         float h = 0.55 + 0.20 * sin(float(k) * 1.7 + g_time * 0.25);
-        float dp = sd_box(p, pc + float3(0, h, 0), float3(0.10, h, 0.10));
         int pmat = (k % 2 == 0) ? 12 : 13;
-        if (dp < d) { d = dp; mat = pmat; }
+        consider(best, hit_aabb(ro, rd, pc + float3(0, h, 0), float3(0.10, h, 0.10), t, n), t, n, pmat);
     }
 
-    // ---- 5 back-row small spheres ---------------------------------
-    [unroll] for (int j = 0; j < 5; ++j) {
+    // 5 back-row small spheres
+    [unroll]
+    for (int j = 0; j < 5; ++j) {
         float fx = -2.0 + float(j) * 1.0;
-        float ds = sd_sphere(p, float3(fx, 0.18, -3.0), 0.18);
-        if (ds < d) { d = ds; mat = 10; }
+        consider(best, hit_sphere(ro, rd, float3(fx, 0.18, -3.0), 0.18, t, n), t, n, 10);
     }
 
-    // ---- 3 floating rotating cubes --------------------------------
-    [unroll] for (int c = 0; c < 3; ++c) {
+    // 3 floating rotating cubes
+    [unroll]
+    for (int c = 0; c < 3; ++c) {
         float ca = g_time * 0.40 + float(c) * 2.0944 + 0.5;
         float radius = 1.05;
-        float3 cc = float3(
-            radius * cos(ca),
-            1.40 + 0.45 * sin(g_time * 0.50 + float(c)),
-            radius * sin(ca)
-        );
-        float3 cube_local = rotate_zx(p - cc, g_time * 0.60 + float(c),
-                                              g_time * 0.45 + float(c) * 1.7);
-        float dc = sd_box(cube_local, float3(0.0), float3(0.13));
-        if (dc < d) { d = dc; mat = 14; }
+        float3 cc = float3(radius * cos(ca), 1.40 + 0.45 * sin(g_time * 0.50 + float(c)), radius * sin(ca));
+        consider(best, hit_obb_zx(ro, rd, cc, float3(0.13), g_time * 0.60 + float(c), g_time * 0.45 + float(c) * 1.7, t, n), t, n, 14);
     }
 
-    return d;
-}
+    // 2 refractive glass spheres
+    [unroll]
+    for (int gi = 0; gi < 2; ++gi)
+        consider(best, hit_sphere(ro, rd, glass_center(gi), glass_radius(gi), t, n), t, n, 15);
 
-float3 scene_normal(float3 p)
-{
-    const float h = 0.001;
-    int m;
-    return normalize(float3(
-        scene_sdf(p + float3(h, 0, 0), m) - scene_sdf(p - float3(h, 0, 0), m),
-        scene_sdf(p + float3(0, h, 0), m) - scene_sdf(p - float3(0, h, 0), m),
-        scene_sdf(p + float3(0, 0, h), m) - scene_sdf(p - float3(0, 0, h), m)
-    ));
-}
-
-bool sphere_trace(float3 ro, float3 rd, out float t, out int mat)
-{
-    t = 0.0; mat = 0;
-    [loop] for (int i = 0; i < 96; ++i) {
-        float3 p = ro + rd * t;
-        float d = scene_sdf(p, mat);
-        if (d < 0.002) return true;
-        t += d;
-        if (t > 60.0) return false;
-    }
-    return false;
+    return best;
 }
 
 // =========================================================== materials
@@ -204,7 +285,10 @@ static const float3 NORD12 = float3(0.816, 0.529, 0.439);  // orange
 static const float3 NORD14 = float3(0.639, 0.745, 0.549);  // green
 static const float3 NORD15 = float3(0.706, 0.557, 0.678);  // magenta
 
+static const float GLASS_IOR = 1.50;
+
 bool is_metal(int mat) { return mat == 5; }
+bool is_glass(int mat) { return mat == 15; }
 bool is_light(int mat) { return mat >= 6 && mat <= 9; }
 
 float3 albedo(int mat, float3 tint)
@@ -215,7 +299,6 @@ float3 albedo(int mat, float3 tint)
     if (mat == 4)  return float3(0.80, 0.82, 0.86);
     if (mat == 5)  return float3(0.97, 0.97, 0.98);
     if (mat == 10) return NORD8;
-    if (mat == 11) return NORD12;
     if (mat == 12) return NORD9;
     if (mat == 13) return NORD7;
     if (mat == 14) return NORD15;
@@ -261,8 +344,8 @@ LightDesc get_light(int idx)
 }
 
 // Sample one light uniformly + a direction within its subtended cone.
-// Trace a shadow ray. If unoccluded (hit the chosen light), return the
-// Lambertian direct-lighting contribution. Otherwise zero.
+// Trace a shadow ray. If unoccluded (the chosen light is the first hit),
+// return the Lambertian direct-lighting contribution. Otherwise zero.
 float3 sample_direct_lighting(float3 p, float3 n, float3 alb, inout RNG rng)
 {
     int idx = min(LIGHT_COUNT - 1, int(rand(rng) * float(LIGHT_COUNT)));
@@ -293,10 +376,9 @@ float3 sample_direct_lighting(float3 p, float3 n, float3 alb, inout RNG rng)
     float cos_n = dot(n, wi);
     if (cos_n <= 0.0) return float3(0.0);
 
-    // Shadow ray -- the chosen light must be the first hit.
-    float ts; int ms;
-    bool hit = sphere_trace(p + n * 0.003, wi, ts, ms);
-    if (!hit || !is_light(ms)) return float3(0.0);
+    // Shadow ray -- the chosen light must be the first thing we hit.
+    Hit sh = scene_intersect(p + n * 0.003, wi);
+    if (sh.mat < 0 || !is_light(sh.mat)) return float3(0.0);
 
     float omega = 6.28318530718 * (1.0 - cos_th_max);
     float pdf   = 1.0 / (float(LIGHT_COUNT) * omega);
@@ -305,7 +387,6 @@ float3 sample_direct_lighting(float3 p, float3 n, float3 alb, inout RNG rng)
 }
 
 // =============================================================== sky
-// Pitch black: lights are the entire energy source.
 float3 sky_dome(float3 dir, float3 zenith)
 {
     return zenith;     // host sets it to (0,0,0); slider can re-enable a tint
@@ -324,43 +405,68 @@ float3 sample_hemisphere_cos(float3 n, inout RNG rng)
     return r * cos(phi) * t + r * sin(phi) * b + sqrt(max(0.0, 1.0 - u1)) * n;
 }
 
+// Schlick Fresnel reflectance for a dielectric.
+float fresnel_schlick(float cos_in, float ior)
+{
+    float r0 = (1.0 - ior) / (1.0 + ior);
+    r0 = r0 * r0;
+    float m = clamp(1.0 - cos_in, 0.0, 1.0);
+    return r0 + (1.0 - r0) * m * m * m * m * m;
+}
+
 float3 pathtrace(float3 ro, float3 rd, float3 tint, float3 zenith, inout RNG rng)
 {
     float3 L          = float3(0.0);
     float3 throughput = float3(1.0);
     bool   last_spec  = true;       // primary ray: treat as specular
-    [loop] for (int bounce = 0; bounce < 3; ++bounce) {
-        float t; int mat;
-        if (!sphere_trace(ro, rd, t, mat)) {
+    [loop] for (int bounce = 0; bounce < 8; ++bounce) {
+        Hit hit = scene_intersect(ro, rd);
+        if (hit.mat < 0) {
             L += throughput * sky_dome(rd, zenith);
             break;
         }
-        float3 p = ro + rd * t;
-        float3 n = scene_normal(p);
+        float3 p = ro + rd * hit.t;
+        float3 ng = hit.n;
 
-        if (is_light(mat)) {
-            // Only count emission on primary/specular paths; for
-            // diffuse paths NEE already estimated this light's
-            // contribution on the previous bounce.
-            if (last_spec) L += throughput * emission(mat);
+        if (is_light(hit.mat)) {
+            // Only count emission on primary/specular paths; for diffuse
+            // paths NEE already estimated this light's contribution.
+            if (last_spec) L += throughput * emission(hit.mat);
             break;
         }
 
-        float3 alb = albedo(mat, tint);
-
-        // Next-event estimation for diffuse surfaces -- one shadow ray
-        // to a random light's subtended cone.
-        if (!is_metal(mat)) {
-            L += throughput * sample_direct_lighting(p, n, alb, rng);
+        if (is_glass(hit.mat)) {
+            // Dielectric: reflect or refract, chosen by Fresnel.
+            bool entering = dot(rd, ng) < 0.0;
+            float3 nl = entering ? ng : -ng;
+            float eta = entering ? (1.0 / GLASS_IOR) : GLASS_IOR;
+            float cos_in = abs(dot(rd, ng));
+            float fres = fresnel_schlick(cos_in, GLASS_IOR);
+            float3 refr = refract(rd, nl, eta);
+            bool tir = dot(refr, refr) < 1e-8;
+            if (tir || rand(rng) < fres)
+                rd = reflect(rd, nl);
+            else
+                rd = refr;
+            ro = p + rd * 0.001;
+            last_spec = true;
+            continue;
         }
 
-        ro = p + n * 0.003;
-        throughput *= alb;
+        // Shading normal faces the incoming ray (handles back faces).
+        float3 n = (dot(ng, rd) < 0.0) ? ng : -ng;
+        float3 alb = albedo(hit.mat, tint);
 
-        if (is_metal(mat)) {
+        if (is_metal(hit.mat)) {
+            throughput *= alb;
+            ro = p + n * 0.003;
             rd = reflect(rd, n);
             last_spec = true;
         } else {
+            // Diffuse: next-event estimation + cosine-weighted bounce.
+            L += throughput * sample_direct_lighting(p, n, alb, rng);
+            throughput *= alb;
+            ro = p + n * 0.003;
             rd = sample_hemisphere_cos(n, rng);
             last_spec = false;
         }

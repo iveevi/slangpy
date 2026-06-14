@@ -281,54 +281,44 @@ SGL_PY_EXPORT(ui)
         .def("colors_classic", &ui::Style::colors_classic)
         .def("get_color", &ui::Style::get_color, "col"_a)
         .def("set_color", &ui::Style::set_color, "col"_a, "value"_a)
-#define SGL_UI_STYLE_FLOAT_BIND(name) \
-    .def_prop_rw(#name, &ui::Style::name, &ui::Style::set_##name)
-#define SGL_UI_STYLE_VEC2_BIND(name) \
-    .def_prop_rw(#name, &ui::Style::name, &ui::Style::set_##name)
-#define SGL_UI_STYLE_BOOL_BIND(name) \
-    .def_prop_rw(#name, &ui::Style::name, &ui::Style::set_##name)
-        SGL_UI_STYLE_FLOAT_BIND(alpha)
-        SGL_UI_STYLE_FLOAT_BIND(disabled_alpha)
-        SGL_UI_STYLE_VEC2_BIND(window_padding)
-        SGL_UI_STYLE_FLOAT_BIND(window_rounding)
-        SGL_UI_STYLE_FLOAT_BIND(window_border_size)
-        SGL_UI_STYLE_VEC2_BIND(window_min_size)
-        SGL_UI_STYLE_VEC2_BIND(window_title_align)
-        SGL_UI_STYLE_FLOAT_BIND(child_rounding)
-        SGL_UI_STYLE_FLOAT_BIND(child_border_size)
-        SGL_UI_STYLE_FLOAT_BIND(popup_rounding)
-        SGL_UI_STYLE_FLOAT_BIND(popup_border_size)
-        SGL_UI_STYLE_VEC2_BIND(frame_padding)
-        SGL_UI_STYLE_FLOAT_BIND(frame_rounding)
-        SGL_UI_STYLE_FLOAT_BIND(frame_border_size)
-        SGL_UI_STYLE_VEC2_BIND(item_spacing)
-        SGL_UI_STYLE_VEC2_BIND(item_inner_spacing)
-        SGL_UI_STYLE_VEC2_BIND(cell_padding)
-        SGL_UI_STYLE_VEC2_BIND(touch_extra_padding)
-        SGL_UI_STYLE_FLOAT_BIND(indent_spacing)
-        SGL_UI_STYLE_FLOAT_BIND(columns_min_spacing)
-        SGL_UI_STYLE_FLOAT_BIND(scrollbar_size)
-        SGL_UI_STYLE_FLOAT_BIND(scrollbar_rounding)
-        SGL_UI_STYLE_FLOAT_BIND(grab_min_size)
-        SGL_UI_STYLE_FLOAT_BIND(grab_rounding)
-        SGL_UI_STYLE_FLOAT_BIND(log_slider_deadzone)
-        SGL_UI_STYLE_FLOAT_BIND(tab_rounding)
-        SGL_UI_STYLE_FLOAT_BIND(tab_border_size)
-        SGL_UI_STYLE_FLOAT_BIND(tab_bar_border_size)
-        SGL_UI_STYLE_FLOAT_BIND(tab_bar_overline_size)
-        SGL_UI_STYLE_FLOAT_BIND(separator_text_border_size)
-        SGL_UI_STYLE_VEC2_BIND(separator_text_align)
-        SGL_UI_STYLE_VEC2_BIND(separator_text_padding)
-        SGL_UI_STYLE_VEC2_BIND(button_text_align)
-        SGL_UI_STYLE_VEC2_BIND(selectable_text_align)
-        SGL_UI_STYLE_FLOAT_BIND(docking_separator_size)
-        SGL_UI_STYLE_FLOAT_BIND(mouse_cursor_scale)
-        SGL_UI_STYLE_BOOL_BIND(anti_aliased_lines)
-        SGL_UI_STYLE_BOOL_BIND(anti_aliased_lines_use_tex)
-        SGL_UI_STYLE_BOOL_BIND(anti_aliased_fill)
-        SGL_UI_STYLE_FLOAT_BIND(curve_tessellation_tol)
-        SGL_UI_STYLE_FLOAT_BIND(circle_tessellation_max_error)
-        ;
+#define SGL_UI_STYLE_FLOAT_BIND(name) .def_prop_rw(#name, &ui::Style::name, &ui::Style::set_##name)
+#define SGL_UI_STYLE_VEC2_BIND(name) .def_prop_rw(#name, &ui::Style::name, &ui::Style::set_##name)
+#define SGL_UI_STYLE_BOOL_BIND(name) .def_prop_rw(#name, &ui::Style::name, &ui::Style::set_##name)
+            SGL_UI_STYLE_FLOAT_BIND(alpha) SGL_UI_STYLE_FLOAT_BIND(disabled_alpha) SGL_UI_STYLE_VEC2_BIND(
+                window_padding
+            ) SGL_UI_STYLE_FLOAT_BIND(window_rounding) SGL_UI_STYLE_FLOAT_BIND(window_border_size)
+                SGL_UI_STYLE_VEC2_BIND(window_min_size) SGL_UI_STYLE_VEC2_BIND(
+                    window_title_align
+                ) SGL_UI_STYLE_FLOAT_BIND(child_rounding) SGL_UI_STYLE_FLOAT_BIND(child_border_size)
+                    SGL_UI_STYLE_FLOAT_BIND(popup_rounding) SGL_UI_STYLE_FLOAT_BIND(
+                        popup_border_size
+                    ) SGL_UI_STYLE_VEC2_BIND(frame_padding) SGL_UI_STYLE_FLOAT_BIND(frame_rounding)
+                        SGL_UI_STYLE_FLOAT_BIND(frame_border_size) SGL_UI_STYLE_VEC2_BIND(
+                            item_spacing
+                        ) SGL_UI_STYLE_VEC2_BIND(item_inner_spacing) SGL_UI_STYLE_VEC2_BIND(cell_padding)
+                            SGL_UI_STYLE_VEC2_BIND(touch_extra_padding) SGL_UI_STYLE_FLOAT_BIND(
+                                indent_spacing
+                            ) SGL_UI_STYLE_FLOAT_BIND(columns_min_spacing) SGL_UI_STYLE_FLOAT_BIND(scrollbar_size)
+                                SGL_UI_STYLE_FLOAT_BIND(scrollbar_rounding) SGL_UI_STYLE_FLOAT_BIND(
+                                    grab_min_size
+                                ) SGL_UI_STYLE_FLOAT_BIND(grab_rounding) SGL_UI_STYLE_FLOAT_BIND(log_slider_deadzone)
+                                    SGL_UI_STYLE_FLOAT_BIND(tab_rounding) SGL_UI_STYLE_FLOAT_BIND(tab_border_size)
+                                        SGL_UI_STYLE_FLOAT_BIND(tab_bar_border_size) SGL_UI_STYLE_FLOAT_BIND(
+                                            tab_bar_overline_size
+                                        ) SGL_UI_STYLE_FLOAT_BIND(separator_text_border_size)
+                                            SGL_UI_STYLE_VEC2_BIND(separator_text_align) SGL_UI_STYLE_VEC2_BIND(
+                                                separator_text_padding
+                                            ) SGL_UI_STYLE_VEC2_BIND(button_text_align)
+                                                SGL_UI_STYLE_VEC2_BIND(selectable_text_align)
+                                                    SGL_UI_STYLE_FLOAT_BIND(docking_separator_size)
+                                                        SGL_UI_STYLE_FLOAT_BIND(mouse_cursor_scale)
+                                                            SGL_UI_STYLE_BOOL_BIND(anti_aliased_lines)
+                                                                SGL_UI_STYLE_BOOL_BIND(anti_aliased_lines_use_tex)
+                                                                    SGL_UI_STYLE_BOOL_BIND(anti_aliased_fill)
+                                                                        SGL_UI_STYLE_FLOAT_BIND(curve_tessellation_tol)
+                                                                            SGL_UI_STYLE_FLOAT_BIND(
+                                                                                circle_tessellation_max_error
+                                                                            );
 #undef SGL_UI_STYLE_FLOAT_BIND
 #undef SGL_UI_STYLE_VEC2_BIND
 #undef SGL_UI_STYLE_BOOL_BIND
@@ -392,10 +382,16 @@ SGL_PY_EXPORT(ui)
         .def(
             "add_font",
             &ui::Context::add_font,
-            "name"_a, "path"_a, "size"_a, "is_default"_a = false
+            "name"_a,
+            "path"_a,
+            "size"_a,
+            "is_default"_a = false,
+            "merge"_a = false
         )
         .def("push_font", &ui::Context::push_font, "name"_a)
         .def("pop_font", &ui::Context::pop_font)
+        .def("is_any_item_hovered", &ui::Context::is_any_item_hovered)
+        .def("calc_text_size", &ui::Context::calc_text_size, "text"_a)
         .def_prop_ro("screen", &ui::Context::screen, D(Context, screen))
         .def_prop_ro("style", &ui::Context::style);
 }

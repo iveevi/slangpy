@@ -162,13 +162,15 @@ public:
         std::string_view title = "",
         float2 position = float2(10.f, 10.f),
         float2 size = float2(400.f, 400.f),
-        bool show_title_bar = true
+        bool show_title_bar = true,
+        bool overlay = false
     )
         : Widget(parent)
         , m_title(title)
         , m_position(position)
         , m_size(size)
         , m_show_title_bar(show_title_bar)
+        , m_overlay(overlay)
     {
     }
 
@@ -177,6 +179,13 @@ public:
 
     bool show_title_bar() const { return m_show_title_bar; }
     void set_show_title_bar(bool show) { m_show_title_bar = show; }
+
+    /// Render as a chrome-less overlay: transparent background, no title
+    /// bar / resize / move / docking, auto-sized to its content. Combine
+    /// with set_position() to pin a floating toolbar over another panel
+    /// (e.g. on top of a viewport image). All public ImGui window flags.
+    bool overlay() const { return m_overlay; }
+    void set_overlay(bool overlay) { m_overlay = overlay; }
 
     float2 position() const { return m_position; }
     void set_position(const float2& position)
@@ -191,6 +200,16 @@ public:
         m_size = size;
         m_set_size = true;
     }
+
+    /// Inner padding (ImGuiStyleVar_WindowPadding). A negative component
+    /// uses the global style default; set to (0,0) to let content (e.g. an
+    /// Image) fill the window edge-to-edge.
+    float2 padding() const { return m_padding; }
+    void set_padding(const float2& padding) { m_padding = padding; }
+
+    /// Size of the content region available inside the window, captured on
+    /// the last render. Useful for sizing a render target to the window.
+    float2 content_size() const { return m_content_size; }
 
     void show() { set_visible(true); }
     void close() { set_visible(false); }
@@ -231,7 +250,18 @@ public:
         }
 
         ImGuiWindowFlags flags = 0;
-        if (!m_show_title_bar) {
+        if (m_overlay) {
+            // Chrome-less floating overlay (e.g. a toolbar pinned over a
+            // viewport image). All public ImGui window flags.
+            // NB: no NoBringToFrontOnFocus -- the DockSpaceOverViewport
+            // host uses that flag to sit at the back, and a floating
+            // window sharing it would render *behind* docked windows
+            // (i.e. under the viewport image). Omitting it keeps the
+            // overlay above the docked viewport.
+            flags |= ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove
+                | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoNavFocus
+                | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings;
+        } else if (!m_show_title_bar) {
             flags |= ImGuiWindowFlags_NoTitleBar;
             // NoTitleBar only suppresses the *floating* title bar; once
             // the window is docked, ImGui still draws a tab strip in the
@@ -246,17 +276,23 @@ public:
             ImGui::SetNextWindowClass(&window_class);
         }
 
+        const bool push_padding = m_padding.x >= 0.f && m_padding.y >= 0.f;
+        if (push_padding)
+            ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(m_padding.x, m_padding.y));
+
         ScopedID id(this);
         if (ImGui::Begin(m_title.c_str(), &m_visible, flags)) {
             auto pos = ImGui::GetWindowPos();
             m_position = float2(pos.x, pos.y);
             auto size = ImGui::GetWindowSize();
             m_size = float2(size.x, size.y);
+            auto avail = ImGui::GetContentRegionAvail();
+            m_content_size = float2(avail.x, avail.y);
 
             // Force-hide the dock-node tab strip for chrome-less windows.
             // Mutating LocalFlags directly is what DockBuilder does; it's
             // persisted via imgui.ini so the fix sticks across restarts.
-            if (!m_show_title_bar) {
+            if (!m_overlay && !m_show_title_bar) {
                 if (ImGuiDockNode* node = ImGui::GetWindowDockNode()) {
                     // Mixing the private (ImGuiDockNodeFlagsPrivate_) and
                     // public (ImGuiDockNodeFlags_) enums triggers
@@ -272,6 +308,9 @@ public:
             ImGui::PopItemWidth();
         }
         ImGui::End();
+
+        if (push_padding)
+            ImGui::PopStyleVar();
     }
 
 private:
@@ -283,6 +322,9 @@ private:
     uint32_t m_dock_id{0};
     bool m_set_dock_id{false};
     bool m_show_title_bar{true};
+    bool m_overlay{false};
+    float2 m_padding{-1.f, -1.f};
+    float2 m_content_size{0.f, 0.f};
 };
 
 class Group : public Widget {
@@ -454,10 +496,18 @@ class Button : public Widget {
 public:
     using Callback = std::function<void()>;
 
-    Button(Widget* parent, std::string_view label = "", Callback callback = {})
+    Button(
+        Widget* parent,
+        std::string_view label = "",
+        Callback callback = {},
+        bool active = false,
+        bool border = false
+    )
         : Widget(parent)
         , m_label(label)
         , m_callback(callback)
+        , m_active(active)
+        , m_border(border)
     {
     }
 
@@ -466,6 +516,17 @@ public:
 
     Callback callback() const { return m_callback; }
     void set_callback(Callback callback) { m_callback = callback; }
+
+    /// When true the button is drawn filled with the theme's accent
+    /// (ImGuiCol_HeaderActive) to show a selected/toggled state. Use for
+    /// radio-style button groups. Purely a style push around ImGui::Button.
+    bool active() const { return m_active; }
+    void set_active(bool active) { m_active = active; }
+
+    /// When true the button is drawn with a 1px frame border (ImGuiCol_Border)
+    /// even if the global FrameBorderSize is 0. Style push around ImGui::Button.
+    bool border() const { return m_border; }
+    void set_border(bool border) { m_border = border; }
 
     void notify()
     {
@@ -480,13 +541,95 @@ public:
 
         ScopedID id(this);
         ScopedDisable disable(!m_enabled);
+        if (m_border) {
+            // 1px frame border in a visible colour (derived from the text
+            // colour) so it shows even when the global FrameBorderSize is 0
+            // and the theme's border colour is faint.
+            ImVec4 bc = ImGui::GetStyleColorVec4(ImGuiCol_Text);
+            bc.w *= 0.7f;
+            ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
+            ImGui::PushStyleColor(ImGuiCol_Border, bc);
+        }
+        if (m_active) {
+            const ImVec4 accent = ImGui::GetStyleColorVec4(ImGuiCol_HeaderActive);
+            ImGui::PushStyleColor(ImGuiCol_Button, accent);
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, accent);
+            ImGui::PushStyleColor(ImGuiCol_ButtonActive, accent);
+        }
         if (ImGui::Button(m_label.c_str()))
             notify();
+        if (m_active)
+            ImGui::PopStyleColor(3);
+        if (m_border) {
+            ImGui::PopStyleColor();
+            ImGui::PopStyleVar();
+        }
     }
 
 private:
     std::string m_label;
     Callback m_callback;
+    bool m_active{false};
+    bool m_border{false};
+};
+
+/// Places the next sibling widget on the same line as the previous one
+/// (ImGui::SameLine). Use between widgets to lay them out horizontally.
+class SameLine : public Widget {
+    SGL_OBJECT(SameLine)
+public:
+    SameLine(Widget* parent, float offset_x = 0.f, float spacing = -1.f)
+        : Widget(parent)
+        , m_offset_x(offset_x)
+        , m_spacing(spacing)
+    {
+    }
+
+    float offset_x() const { return m_offset_x; }
+    void set_offset_x(float v) { m_offset_x = v; }
+
+    float spacing() const { return m_spacing; }
+    void set_spacing(float v) { m_spacing = v; }
+
+    virtual void render() override
+    {
+        if (!m_visible)
+            return;
+        ImGui::SameLine(m_offset_x, m_spacing);
+    }
+
+private:
+    float m_offset_x;
+    float m_spacing;
+};
+
+/// Moves the draw cursor to a position relative to the window's content
+/// region top-left, so following sibling widgets can be placed at an
+/// explicit spot -- e.g. overlaid on top of a preceding Image in the same
+/// window. (Relative to the content origin, not the window origin, so it
+/// stays clear of the title/tab bar.)
+class CursorPos : public Widget {
+    SGL_OBJECT(CursorPos)
+public:
+    CursorPos(Widget* parent, float2 pos = float2(0.f, 0.f))
+        : Widget(parent)
+        , m_pos(pos)
+    {
+    }
+
+    float2 pos() const { return m_pos; }
+    void set_pos(const float2& pos) { m_pos = pos; }
+
+    virtual void render() override
+    {
+        if (!m_visible)
+            return;
+        const ImVec2 start = ImGui::GetCursorStartPos();
+        ImGui::SetCursorPos(ImVec2(start.x + m_pos.x, start.y + m_pos.y));
+    }
+
+private:
+    float2 m_pos;
 };
 
 template<typename T>
@@ -1065,13 +1208,19 @@ public:
 
     virtual void render() override
     {
-        if (!m_visible || !m_texture || m_size.x <= 0.f || m_size.y <= 0.f)
+        if (!m_visible || !m_texture)
             return;
         ScopedID id(this);
         ScopedDisable disable(!m_enabled);
+        // A non-positive size component fills the available content region
+        // on that axis, so the image can stretch to fill its window.
+        ImVec2 avail = ImGui::GetContentRegionAvail();
+        ImVec2 sz(m_size.x > 0.f ? m_size.x : avail.x, m_size.y > 0.f ? m_size.y : avail.y);
+        if (sz.x <= 0.f || sz.y <= 0.f)
+            return;
         ImGui::Image(
             reinterpret_cast<ImTextureID>(m_texture.get()),
-            ImVec2(m_size.x, m_size.y),
+            sz,
             ImVec2(m_uv0.x, m_uv0.y),
             ImVec2(m_uv1.x, m_uv1.y)
         );
@@ -1080,6 +1229,77 @@ public:
 private:
     ref<Texture> m_texture;
     float2 m_size;
+    float2 m_uv0;
+    float2 m_uv1;
+};
+
+/// Clickable image (ImGui::ImageButton). Like \c Image but behaves as a
+/// button: invokes \c callback when clicked. Useful for texture-based
+/// icon toolbars. \c size is the image size in points (excludes the
+/// frame padding ImGui adds around it).
+class ImageButton : public Widget {
+    SGL_OBJECT(ImageButton)
+public:
+    using Callback = std::function<void()>;
+
+    ImageButton(
+        Widget* parent,
+        ref<Texture> texture = nullptr,
+        float2 size = float2(0.f, 0.f),
+        Callback callback = {},
+        float2 uv0 = float2(0.f, 0.f),
+        float2 uv1 = float2(1.f, 1.f)
+    )
+        : Widget(parent)
+        , m_texture(texture)
+        , m_size(size)
+        , m_callback(callback)
+        , m_uv0(uv0)
+        , m_uv1(uv1)
+    {
+    }
+
+    ref<Texture> texture() const { return m_texture; }
+    void set_texture(ref<Texture> texture) { m_texture = texture; }
+
+    float2 size() const { return m_size; }
+    void set_size(const float2& size) { m_size = size; }
+
+    float2 uv0() const { return m_uv0; }
+    void set_uv0(const float2& uv0) { m_uv0 = uv0; }
+
+    float2 uv1() const { return m_uv1; }
+    void set_uv1(const float2& uv1) { m_uv1 = uv1; }
+
+    Callback callback() const { return m_callback; }
+    void set_callback(Callback callback) { m_callback = callback; }
+
+    void notify()
+    {
+        if (m_callback)
+            m_callback();
+    }
+
+    virtual void render() override
+    {
+        if (!m_visible || !m_texture || m_size.x <= 0.f || m_size.y <= 0.f)
+            return;
+        ScopedID id(this);
+        ScopedDisable disable(!m_enabled);
+        if (ImGui::ImageButton(
+                "##image_button",
+                reinterpret_cast<ImTextureID>(m_texture.get()),
+                ImVec2(m_size.x, m_size.y),
+                ImVec2(m_uv0.x, m_uv0.y),
+                ImVec2(m_uv1.x, m_uv1.y)
+            ))
+            notify();
+    }
+
+private:
+    ref<Texture> m_texture;
+    float2 m_size;
+    Callback m_callback;
     float2 m_uv0;
     float2 m_uv1;
 };
