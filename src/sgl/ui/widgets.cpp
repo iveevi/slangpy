@@ -531,4 +531,13 @@ void DockSpace::render()
     Widget::render();
 }
 
+std::pair<uint32_t, uint32_t> DockSpace::split_node(uint32_t node, bool vertical, float ratio)
+{
+    ImGuiID first = 0, second = 0;
+    ImGuiDir dir = vertical ? ImGuiDir_Up : ImGuiDir_Left;
+    ImGui::DockBuilderSplitNode(static_cast<ImGuiID>(node), dir, ratio, &first, &second);
+    ImGui::DockBuilderFinish(static_cast<ImGuiID>(m_dock_id));
+    return {static_cast<uint32_t>(first), static_cast<uint32_t>(second)};
+}
+
 } // namespace sgl::ui

@@ -528,5 +528,6 @@ SGL_PY_EXPORT(ui_widgets)
         .def_prop_ro("right_dock_id", &DockSpace::right_dock_id)
         .def("request_split_horizontal", &DockSpace::request_split_horizontal, "ratio"_a)
         .def("request_split_vertical", &DockSpace::request_split_vertical, "ratio"_a)
+        .def("split_node", &DockSpace::split_node, "node"_a, "vertical"_a, "ratio"_a)
         .def_prop_rw("passthru_central_node", &DockSpace::passthru_central_node, &DockSpace::set_passthru_central_node);
 }

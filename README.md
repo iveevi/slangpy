@@ -31,19 +31,22 @@ sphinx-build -b html docs docs/_build/html
 
 ## Example
 
-See [`examples/fork_demo/`](examples/fork_demo/) — a single program
-exercising essentially every fork feature in one app: a progressive SDF
-path tracer rendered into a dockable `ui.Image` viewport, with an
-orbit-camera (mouse drag), per-light intensity sliders, exposure /
-render-scale controls, scene material editing, a Nord-themed live
-`Style`, custom fonts, and persistent layout via `imgui.ini`.
+See [`examples/imgui/`](examples/imgui/) — a single program exercising
+essentially every fork feature in one app: a progressive path tracer
+(analytic ray/primitive intersection, refractive glass) rendered into a
+dockable `ui.Image` viewport, with an orbit-camera (mouse drag), per-light
+intensity sliders, scene material editing, a viewport overlay toolbar +
+sample-count chip, merged FontAwesome icons, and persistent layout via
+`imgui.ini`.
 
 ```bash
-python examples/fork_demo/fork_demo.py
+python examples/imgui/demo.py
 ```
 
-The README inside `examples/fork_demo/` enumerates which fork feature
-each part of the demo exercises and where in the code to look.
+The README inside `examples/imgui/` enumerates which fork feature each
+part of the demo exercises and where in the code to look. A separate
+`examples/imgui_bundle/` holds the external-ImGui (imgui_bundle)
+offscreen-rendering example.
 
 ## Upstream
 

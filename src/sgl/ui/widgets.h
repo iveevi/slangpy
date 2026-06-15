@@ -15,6 +15,7 @@
 #include <string_view>
 #include <string>
 #include <functional>
+#include <utility>
 #include <vector>
 
 namespace sgl::ui {
@@ -1335,6 +1336,15 @@ public:
         m_split_dir = SplitDir::Vertical;
         m_split_ratio = ratio;
     }
+
+    /// Split an already-existing dock node in two and return the child node
+    /// ids. \c node is a node id obtained earlier (e.g. \c left_dock_id()
+    /// after a root split). When \c vertical is true the split is top/bottom
+    /// (first = top), otherwise left/right (first = left); \c ratio is the
+    /// fraction taken by the first child. Must be called inside a frame
+    /// (between begin_frame / end_frame). Lets a pane be sub-divided so
+    /// several windows stack instead of tabbing onto one node.
+    std::pair<uint32_t, uint32_t> split_node(uint32_t node, bool vertical, float ratio);
 
     /// Make the central dock node transparent so the surface (or whatever
     /// is rendered behind ImGui) shows through where no docked window
