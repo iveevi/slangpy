@@ -12,18 +12,11 @@ upstream verbatim.
 
 ## Documentation
 
-Per-feature reference for the fork lives in [`docs/fork/`](docs/fork/):
-
-| Page | Covers |
-|---|---|
-| [`fork/index.rst`](docs/fork/index.rst) | Overview, motivation, summary table |
-| [`fork/widgets.rst`](docs/fork/widgets.rst) | `Image`, `Plot`, `PlotLines`, `Separator`, `ColorEdit/Picker`, `DockSpace`, `Window` |
-| [`fork/plotting.rst`](docs/fork/plotting.rst) | `Plot` deep-dive: line / histogram / bar groups, legend, axes |
-| [`fork/context.rst`](docs/fork/context.rst) | Font API, `Style` + `Col`, `AppWindow.ui_context`, `imgui.ini` |
-| [`fork/window.rst`](docs/fork/window.rst) | `decorated` / `show_title_bar` / `dock_id`, layout persistence |
-| [`fork/internals.rst`](docs/fork/internals.rst) | ImPlot fetch + patches, `end_frame` rendering fixes |
-
-The upstream Sphinx docs build cleanly with the fork pages mounted:
+The `spy.ui` widgets (including the fork's additions — `Image`, `Plot`,
+`DockSpace`, `TreeNode`, `ColorEdit/Picker`, `Separator`, the font/style
+APIs, etc.) are documented in the generated API reference under the
+`slangpy.ui` namespace, sourced from the docstrings in `src/sgl/ui/`. The
+Sphinx docs build with:
 
 ```bash
 sphinx-build -b html docs docs/_build/html

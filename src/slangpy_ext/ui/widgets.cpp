@@ -3,10 +3,7 @@
 #include "nanobind.h"
 
 #include "sgl/ui/widgets.h"
-// nanobind needs the full Texture type (not just a fwd decl) to instantiate
-// ref<Texture> bindings. Including resource.h drags in sgl::Window via
-// transitive headers, which becomes ambiguous with sgl::ui::Window inside
-// SGL_PY_EXPORT below -- every Window reference there is qualified ui::Window.
+// Full Texture type is needed to bind ref<Texture>.
 #include "sgl/device/resource.h"
 
 #undef D
@@ -511,11 +508,8 @@ SGL_PY_EXPORT(ui_widgets)
             "values_per_label"_a,
             "group_size"_a = 0.67,
             "stacked"_a = false,
-            "Set the bar-groups overlay (ImPlot::PlotBarGroups). `labels` "
-            "names each series; `values_per_label[i]` is the per-group "
-            "values for series i. All inner lists should be the same length "
-            "(= group count). When `stacked` is true, segments stack into "
-            "a single column per group; otherwise they sit side-by-side."
+            "Set the bar-groups overlay (ImPlot::PlotBarGroups). values_per_label[i] is the "
+            "per-group series for label i; stacked stacks segments instead of grouping them."
         )
         .def("clear_bar_groups", &Plot::clear_bar_groups)
         .def("push_to_line", &Plot::push_to_line, "name"_a, "value"_a, "max_history"_a = 0)
@@ -528,6 +522,14 @@ SGL_PY_EXPORT(ui_widgets)
         .def_prop_ro("right_dock_id", &DockSpace::right_dock_id)
         .def("request_split_horizontal", &DockSpace::request_split_horizontal, "ratio"_a)
         .def("request_split_vertical", &DockSpace::request_split_vertical, "ratio"_a)
-        .def("split_node", &DockSpace::split_node, "node"_a, "vertical"_a, "ratio"_a)
+        .def(
+            "split_node",
+            &DockSpace::split_node,
+            "node"_a,
+            "vertical"_a,
+            "ratio"_a,
+            "Split an existing node, returning the two child ids (vertical = top/bottom, "
+            "else left/right; ratio = the first child's fraction). Call inside a frame."
+        )
         .def_prop_rw("passthru_central_node", &DockSpace::passthru_central_node, &DockSpace::set_passthru_central_node);
 }

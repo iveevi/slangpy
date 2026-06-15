@@ -1,28 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 #
-# Showcase for every feature added by the iveevi/slangpy fork.
-#
-# Demonstrates, in a single program:
-#
-#   * spy.Window(decorated=False) -- borderless OS window
-#   * ui.Context.add_font / push_font / pop_font -- font registry
-#   * ui.Context.add_font(merge=True) -- FontAwesome icon-font merge
-#   * ui.CursorPos + ui.Button -- FontAwesome action toolbar over the viewport
-#   * ui.Context.style + ui.Col + ui.Style.set_color -- live ImGuiStyle
-#   * imgui.ini persistence (saved layout reload on second launch)
-#   * ui.DockSpace with passthru_central_node and request_split_horizontal
-#   * ui.Window.dock_id -- programmatic docking
-#   * ui.Image displaying a compute-written texture
-#   * ui.Plot mixing line, histogram and bar-group series
-#   * ui.LegendLocation + legend_outside + legend_horizontal
-#   * ui.Plot.add_bar_groups (rolling frame-time bar chart)
-#   * ui.TreeNode (nested scene inspector)
-#   * ui.ColorEdit4 and ui.ColorPicker3
-#
-# Run from the repo root after building:  python examples/imgui/demo.py
-#
-# Press F1 to reset the dock layout (deletes imgui.ini and re-splits).
-# Press Esc to quit.
+# Demo exercising the iveevi/slangpy fork's spy.ui additions: a progressive
+# path tracer rendered into a dockable ui.Image viewport with plots, a scene
+# inspector, fonts and icons. F1 resets the layout, Esc quits.
 
 from __future__ import annotations
 
@@ -39,12 +19,6 @@ EXAMPLE_DIR = Path(__file__).parent
 IMGUI_INI = "imgui.ini"
 
 
-# Fonts are bundled next to this script so the demo looks identical on
-# every machine -- no dependency on what happens to be installed. Fira
-# Sans (SIL OFL 1.1) is the text face, registered at a body and a header
-# size; FontAwesome 6 Free Solid (SIL OFL 1.1) supplies the icon glyphs,
-# merged into the body font via add_font(merge=True) so icon codepoints
-# render inline in labels.
 FONT_TEXT = EXAMPLE_DIR / "FiraSans-Regular.ttf"
 FONT_ICONS = EXAMPLE_DIR / "fa-solid-900.ttf"
 FONT_BODY_SIZE = 22.0
@@ -57,9 +31,6 @@ ICON_CAMERA = "\uf030"  # camera
 # Number of frame-time bars shown in the performance bar-group chart.
 FRAME_BARS = 30
 
-# The scene is static; this fixed time picks the pose fed to scene.slang
-# (orbit angles, box/cube rotation, light positions). The path tracer then
-# accumulates indefinitely until a reset (camera move, material edit, resize).
 SCENE_TIME = 1.5
 
 
@@ -69,18 +40,11 @@ TINT_DEFAULT = spy.float3(0.533, 0.753, 0.816)
 
 class ForkDemo:
     def __init__(self, headless: bool = False) -> None:
-        # Headless mode skips the OS window/surface so the UI can be rendered
-        # to an offscreen texture (see render_headless) without a display --
-        # useful for screenshots / inspection in CI or over SSH.
         self.headless = headless
         self.window: Optional[spy.Window] = None
         self.surface = None
 
         if not headless:
-            # GLFW needs an X display (this build is X11-only). On a Wayland
-            # session like niri, that means XWayland -- DISPLAY must point at
-            # it (typically ":1" via xwayland-satellite). Give a useful
-            # message instead of a bare "Failed to initialize GLFW".
             if not os.environ.get("DISPLAY"):
                 raise RuntimeError(
                     "DISPLAY is unset. This demo's GLFW build is X11-only, so "
@@ -104,30 +68,12 @@ class ForkDemo:
             self.surface = self.device.create_surface(self.window)
             self.surface.configure(width=self.window.width, height=self.window.height)
 
-        # ------------------------------------------------------------------
-        # UI context, fonts, style.
-        # add_font must be called BEFORE the first frame (it builds the
-        # ImGui font atlas). ImPlot's context is created/destroyed
-        # alongside ImGui's so ui.Plot works out of the box.
-        # ------------------------------------------------------------------
         self.ui = spy.ui.Context(self.device)
         self._register_fonts()
         self._configure_style()
 
-        # ------------------------------------------------------------------
-        # Progressive path tracer (analytic ray/primitive intersection).
-        # The kernel writes one new sample
-        # per dispatch into g_accum (running mean) and a tonemapped
-        # version into g_output. g_output is blitted to the surface --
-        # the passthru central node makes it the visible backdrop.
-        # ------------------------------------------------------------------
         program = self.device.load_program("scene", ["compute_main"])
         self.kernel = self.device.create_compute_kernel(program)
-        # The PT renders at 1/16 the viewport resolution -- a quarter of
-        # the width and a quarter of the height of the viewport's content
-        # area, i.e. a sixteenth of its pixel count. Re-allocated by
-        # _ensure_pt_textures() whenever the viewport changes size; the
-        # ui.Image bilinearly upscales the result to fill the viewport.
         self.pt_width = 1280
         self.pt_height = 720
         self.render_scale = 0.25  # per-axis -> 1/16 the pixel count
@@ -135,10 +81,6 @@ class ForkDemo:
         self.accum_texture: Optional[spy.Texture] = None  # running mean
         self.sample_count = 0
 
-        # ------------------------------------------------------------------
-        # Orbit camera (mouse-driven). LMB drag = rotate, MMB/RMB drag =
-        # pan target, wheel = zoom.
-        # ------------------------------------------------------------------
         self.cam_target = [0.0, 1.7, 0.0]  # roughly the box centre
         self.cam_yaw = 0.0
         self.cam_pitch = 0.06  # radians; + looks down at the scene
@@ -147,26 +89,14 @@ class ForkDemo:
         self._mouse_down = {"left": False, "right": False, "middle": False}
         self._last_mouse: Optional[tuple[float, float]] = None
 
-        # ------------------------------------------------------------------
-        # The sparkline gets filled from the main loop; no other
-        # telemetry state needed.
-
-        # ------------------------------------------------------------------
-        # Event wiring (only with a real window).
-        # ------------------------------------------------------------------
         if not headless:
             self.window.on_keyboard_event = self._on_keyboard_event
             self.window.on_mouse_event = self._on_mouse_event
             self.window.on_resize = self._on_resize
         self._terminate = False
 
-        # ------------------------------------------------------------------
-        # Widgets.
-        # ------------------------------------------------------------------
         self._build_widgets()
 
-        # First-launch docking: if imgui.ini doesn't exist, request a
-        # programmatic split. Otherwise the saved layout takes over.
         self._needs_layout = not Path(IMGUI_INI).exists()
         if self._needs_layout:
             self.dock.request_split_horizontal(0.27)
@@ -200,57 +130,30 @@ class ForkDemo:
     def _build_widgets(self) -> None:
         screen = self.ui.screen
 
-        # DockSpace that fills the viewport. passthru_central_node is
-        # OFF so the central area is filled by ImGui's docking_empty_bg
-        # colour (Nord polar-night) -- the path-traced output goes in
-        # the dedicated `viewport` window via ui.Image.
         self.dock = spy.ui.DockSpace(screen)
         self.dock.passthru_central_node = False
 
-        # Left-side panels, each its own dock window (all tabbed into the
-        # left node by _try_apply_layout; drag tabs to split them apart):
-        #   performance  -- smoothed frame-time telemetry
-        #   scene inspector -- nested scene tree (built below)
         self.perf_window = spy.ui.Window(screen, "Performance", size=spy.float2(400, 900))
-        # Dedicated viewport window holding the ui.Image of the
-        # path-tracer output. Docked to the right node so it fills the
-        # entire right side of the layout. Mouse drag inside this
-        # window's area drives the camera.
         self.viewport_window = spy.ui.Window(
             screen,
             "Viewport",
             position=spy.float2(440, 30),
             size=spy.float2(1100, 900),
         )
-        # Scene inspector: its own window holding the nested scene tree,
-        # docked as a tab alongside `controls` (see _try_apply_layout).
         self.inspector_window = spy.ui.Window(
             screen,
             "Scene Inspector",
             size=spy.float2(400, 900),
         )
-        # Render settings: post-process / display controls (tone map,
-        # exposure). Kept out of the scene inspector, which lists only
-        # scene contents (objects + lights). Docked as a left-side tab.
         self.render_window = spy.ui.Window(
             screen,
             "Render Settings",
             size=spy.float2(400, 900),
         )
 
-        # -- left controls ------------------------------------------------
-        # Organised into collapsible ui.Group sections.
-
         def _reset(*_: object) -> None:
             self.sample_count = 0
 
-        # ----- scene inspector (own dock panel) -----------------------
-        # A scene-graph mirror of the scene in scene.slang lives in
-        # its own window, docked as a tab alongside `controls`. TreeNode
-        # widgets nest arbitrarily: a TreeNode parented to another
-        # TreeNode renders indented inside it (ImGui TreeNodeEx/TreePop).
-        # The leaves are live controls, so editing the tree drives the
-        # path tracer and resets accumulation via _reset.
         scene = spy.ui.TreeNode(self.inspector_window, "Scene", open=True)
 
         # geometry/
@@ -273,9 +176,6 @@ class ForkDemo:
         glass = spy.ui.TreeNode(geometry, "Glass Sphere", open=True)
         spy.ui.Text(glass, "Refractive (dielectric, IOR 1.5)")
 
-        # lights/  -- each of the four square ceiling emitters is its own
-        # object node, with an intensity multiplier inside. 1.0 keeps the
-        # shader's baked-in intensity; 0.0 turns the light off entirely.
         lights = spy.ui.TreeNode(scene, "Lights", open=True)
 
         def _light_slider(name: str) -> "spy.ui.SliderFloat":
@@ -294,10 +194,6 @@ class ForkDemo:
         self.light_pink = _light_slider("Pink Light")
         self.light_lime = _light_slider("Lime Light")
 
-        # ===== window: render settings ================================
-        # Post-process / display controls. Tone mapping and exposure are
-        # applied on output from the accumulated mean, so changing them
-        # only re-grades the displayed image -- no accumulation reset.
         self.tonemap = spy.ui.ComboBox(
             self.render_window,
             "Tone Map",
@@ -311,9 +207,6 @@ class ForkDemo:
             min=0.05,
             max=8.0,
         )
-        # Homogeneous fog extinction (1 / mean-free-path). 0 disables it.
-        # Unlike tone map / exposure this changes the rendered radiance, so
-        # it resets accumulation.
         self.fog_density = spy.ui.SliderFloat(
             self.render_window,
             "Fog Density",
@@ -323,20 +216,8 @@ class ForkDemo:
             callback=_reset,
         )
 
-        # ===== window: performance ====================================
-        # Frame-time history shown as a bar-group chart (ImPlot
-        # PlotBarGroups): one "ms" series with FRAME_BARS columns, the
-        # most recent frame on the right. Rolling buffer lives in
-        # self._frame_ms and is pushed every frame in run(); values are
-        # exponentially smoothed (self._frame_ms_ema) so the bars don't
-        # flicker frame-to-frame.
         self._frame_ms = [0.0] * FRAME_BARS
         self._frame_ms_ema = 0.0
-        # ImPlot routes size through ImGui::CalcItemSize: a 0 component
-        # means "use the default size" (~400x300), NOT fill. A negative
-        # component fills the available region (avail - |value|). So
-        # x=-1 stretches to the panel width; height stays a sane fixed
-        # value so the chart is wide rather than tall.
         self.frame_plot = spy.ui.Plot(
             self.perf_window,
             label="Frame Time",
@@ -345,10 +226,6 @@ class ForkDemo:
         )
         self.frame_plot.add_bar_groups(["ms"], [self._frame_ms])
 
-        # -- viewport panel: ui.Image of the path-traced output ---------
-        # size=(0,0) + zero padding fills the window edge-to-edge. (Trade-off:
-        # the image covers the window's rounded bottom corners and the inner
-        # part of the floating resize grip, which ImGui draws under content.)
         self.viewport_window.padding = spy.float2(0.0, 0.0)
         self.viewport_image = spy.ui.Image(
             self.viewport_window,
@@ -356,14 +233,6 @@ class ForkDemo:
             size=spy.float2(0.0, 0.0),
         )
 
-        # ===== viewport action toolbar (overlaid on the image) ========
-        # The toolbar lives INSIDE the viewport window: ui.CursorPos rewinds
-        # the draw cursor back to the top-left after the image, so these
-        # bordered FontAwesome buttons draw on top of it. Being in the same
-        # window, they stay with the viewport whether docked or floating
-        # (no separate-window z-order issues). Camera drag ignores clicks
-        # that land on a button (see _click_targets_viewport +
-        # is_any_item_hovered).
         spy.ui.CursorPos(self.viewport_window, spy.float2(12.0, 12.0))
         spy.ui.Button(
             self.viewport_window,
@@ -379,10 +248,6 @@ class ForkDemo:
             border=True,
         )
 
-        # Sample-count readout as a button-style chip pinned to the top-right
-        # corner of the viewport. The CursorPos is repositioned each frame in
-        # run() (content_size - chip width) to keep it flush-right, and the
-        # chip label is updated there too. No callback -- it's a readout.
         self._spp_cursor = spy.ui.CursorPos(self.viewport_window, spy.float2(0.0, 12.0))
         self.spp_chip = spy.ui.Button(self.viewport_window, "Samples: 0", border=True)
 
@@ -397,10 +262,6 @@ class ForkDemo:
         right = self.dock.right_dock_id
         if left == 0 or right == 0:
             return
-        # Stack the three left-side panels vertically by sub-splitting the
-        # left node into three rows (performance / inspector / render) rather
-        # than tabbing them all onto one node. Each split returns (top,
-        # bottom); the first row takes ~1/3, then the remainder is halved.
         top, rest = self.dock.split_node(left, vertical=True, ratio=0.33)
         middle, bottom = self.dock.split_node(rest, vertical=True, ratio=0.5)
         self.perf_window.dock_id = top
@@ -477,8 +338,6 @@ class ForkDemo:
         AND no other floating panel covers that point."""
         wp = self.viewport_window.position
         ws = self.viewport_window.size
-        # Title-bar inset (rough, but the only ImGui geometry we don't
-        # get from the binding). frame_padding.y=6 + font 22 ~= 38.
         title_h = 38.0
         pad_x = 12.0
         in_image = (
@@ -486,20 +345,11 @@ class ForkDemo:
         )
         if not in_image:
             return False
-        # Leave the bottom-right resize-grip corner to ImGui so a floating
-        # viewport can still be resized (the grip is ~1.5 * font size).
         grip = 1.5 * FONT_BODY_SIZE
         if px >= wp.x + ws.x - grip and py >= wp.y + ws.y - grip:
             return False
-        # Reject if the cursor is over an interactive ImGui item -- this is
-        # how clicks on the viewport's own action toolbar (drawn over the
-        # image) reach the buttons instead of starting a camera drag. The
-        # inert ui.Image is not an item, so the rest of the image still
-        # drives the camera.
         if self.ui.is_any_item_hovered():
             return False
-        # Reject if any other panel covers the cursor -- avoids
-        # camera-grabbing a click that's targeting that panel.
         for panel in (
             self.perf_window,
             self.inspector_window,
@@ -510,17 +360,11 @@ class ForkDemo:
 
     def _on_mouse_event(self, event: spy.MouseEvent) -> None:
         et = spy.MouseEventType
-        # Snapshot the position as plain floats; the MouseEvent object
-        # may be a temporary view that becomes invalid after return.
         px, py = float(event.pos.x), float(event.pos.y)
 
         drag_active = any(self._mouse_down.values())
 
         if event.type == et.button_down:
-            # Camera-drag intent: the click clearly targets the viewport
-            # image AND no other panel covers that point. In that case
-            # the event is consumed exclusively -- ImGui never sees it,
-            # so no window-move / slider-grab fires alongside the camera.
             if self._click_targets_viewport(px, py):
                 self._mouse_down[event.button.name] = True
                 self._last_mouse = (px, py)
@@ -529,8 +373,6 @@ class ForkDemo:
             return
 
         if event.type == et.button_up:
-            # If our camera was tracking this button, end the drag and
-            # do NOT inform ImGui (it never saw the matching down).
             if self._mouse_down.get(event.button.name, False):
                 self._mouse_down[event.button.name] = False
                 self._last_mouse = None
@@ -539,15 +381,10 @@ class ForkDemo:
             return
 
         if event.type == et.move:
-            # If a camera drag is in progress, swallow the event and
-            # apply rotation / pan. Otherwise pass to ImGui (hover etc).
             if drag_active and self._last_mouse is not None:
                 dx = px - self._last_mouse[0]
                 dy = py - self._last_mouse[1]
                 if self._mouse_down["left"]:
-                    # Horizontal: drag right -> scene rotates right
-                    # (camera orbits opposite the cursor, "trackball").
-                    # Vertical: drag down -> camera looks down further.
                     self.cam_yaw -= dx * 0.005
                     self.cam_pitch += dy * 0.005
                     lim = math.pi * 0.5 - 0.05
@@ -566,8 +403,6 @@ class ForkDemo:
             return
 
         if event.type == et.scroll:
-            # Wheel zooms only if the cursor is over the viewport;
-            # otherwise let ImGui scroll its panels.
             if self._click_targets_viewport(px, py):
                 dy = float(event.scroll.y) if hasattr(event, "scroll") else 0.0
                 if dy != 0.0:
@@ -727,12 +562,6 @@ class ForkDemo:
         last_frame = t_start
         frame_counter = 0
 
-        # The body font registered with is_default=True is automatically
-        # applied to every widget call. push_font / pop_font are useful
-        # if you make direct ImGui calls between begin_frame and
-        # end_frame; widget rendering happens inside begin_frame so
-        # there's no Python hook point in between.
-
         while not self.window.should_close() and not self._terminate:
             # ---- events ----
             self.window.process_events()
@@ -750,8 +579,6 @@ class ForkDemo:
             last_frame = now
             dt_ms = dt * 1000.0
 
-            # Exponential moving average smooths the per-frame jitter
-            # before it goes into the bar chart (lower alpha = smoother).
             self._frame_ms_ema = (
                 dt_ms if frame_counter == 0 else 0.06 * dt_ms + 0.94 * self._frame_ms_ema
             )
@@ -761,10 +588,6 @@ class ForkDemo:
 
             # ---- compute (path-tracer sample) ----
             command_encoder = self.device.create_command_encoder()
-            # Size the PT render target to 1/4 the viewport resolution.
-            # content_size is the viewport window's actual inner area
-            # (captured last render); the ui.Image stretches the texture
-            # to fill it.
             self._size_pt_to_viewport()
             assert self.scene_texture is not None and self.accum_texture is not None
 
@@ -772,14 +595,7 @@ class ForkDemo:
             exposure = self.exposure.value
             cam_pos, cam_right, cam_up, cam_fwd = self._camera_basis()
 
-            # Static scene (fixed pose at SCENE_TIME): the path tracer just
-            # keeps accumulating. Resets come from the usual triggers --
-            # camera move, material edits, viewport resize, Space.
             self.sample_count += 1
-            # Update the top-right sample-count chip, kept a fixed 12px from
-            # the viewport's right edge (same inset as the left toolbar).
-            # Chip width = measured text width + button frame padding on both
-            # sides, so the right gap is exact regardless of the digit count.
             spp_label = f"Samples: {self.sample_count}"
             self.spp_chip.label = spp_label
             chip_w = self.ui.calc_text_size(spp_label).x + 2.0 * self.ui.style.frame_padding.x
@@ -813,9 +629,6 @@ class ForkDemo:
                 },
                 command_encoder=command_encoder,
             )
-            # No surface blit: the output is displayed only via the
-            # ui.Image inside the `viewport` window. The dockspace
-            # central node fills the rest with docking_empty_bg.
 
             # ---- ui ----
             self.ui.begin_frame(surface_texture.width, surface_texture.height)

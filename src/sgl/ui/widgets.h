@@ -174,10 +174,7 @@ public:
     bool show_title_bar() const { return m_show_title_bar; }
     void set_show_title_bar(bool show) { m_show_title_bar = show; }
 
-    /// Render as a chrome-less overlay: transparent background, no title
-    /// bar / resize / move / docking, auto-sized to its content. Combine
-    /// with set_position() to pin a floating toolbar over another panel
-    /// (e.g. on top of a viewport image). All public ImGui window flags.
+    /// Render as a chrome-less, auto-sized overlay (no title bar, move, resize or docking).
     bool overlay() const { return m_overlay; }
     void set_overlay(bool overlay) { m_overlay = overlay; }
 
@@ -195,21 +192,17 @@ public:
         m_set_size = true;
     }
 
-    /// Inner padding (ImGuiStyleVar_WindowPadding). A negative component
-    /// uses the global style default; set to (0,0) to let content (e.g. an
-    /// Image) fill the window edge-to-edge.
+    /// Inner padding. A negative component uses the style default; (0,0) lets content fill the window.
     float2 padding() const { return m_padding; }
     void set_padding(const float2& padding) { m_padding = padding; }
 
-    /// Size of the content region available inside the window, captured on
-    /// the last render. Useful for sizing a render target to the window.
+    /// Content region size, captured on the last render.
     float2 content_size() const { return m_content_size; }
 
     void show() { set_visible(true); }
     void close() { set_visible(false); }
 
-    /// Dock this window onto the given dock node on its next render.
-    /// Pass \c 0 to detach (let the user dock manually).
+    /// Dock onto the given node on the next render (0 to detach).
     uint32_t dock_id() const { return m_dock_id; }
     void set_dock_id(uint32_t dock_id)
     {
@@ -251,9 +244,7 @@ private:
     std::string m_label;
 };
 
-/// Collapsible tree node. Unlike Group, the open/close state is
-/// programmatically controllable via the `open` property and reflects
-/// user interaction back after each frame.
+/// Collapsible tree node with a programmatically controllable open state.
 class SGL_API TreeNode : public Widget {
     SGL_OBJECT(TreeNode)
 public:
@@ -360,14 +351,11 @@ public:
     Callback callback() const { return m_callback; }
     void set_callback(Callback callback) { m_callback = callback; }
 
-    /// When true the button is drawn filled with the theme's accent
-    /// (ImGuiCol_HeaderActive) to show a selected/toggled state. Use for
-    /// radio-style button groups. Purely a style push around ImGui::Button.
+    /// Draw filled with the accent colour to show a selected/toggled state.
     bool active() const { return m_active; }
     void set_active(bool active) { m_active = active; }
 
-    /// When true the button is drawn with a 1px frame border (ImGuiCol_Border)
-    /// even if the global FrameBorderSize is 0. Style push around ImGui::Button.
+    /// Draw with a 1px frame border even if the global border size is 0.
     bool border() const { return m_border; }
     void set_border(bool border) { m_border = border; }
 
@@ -386,8 +374,7 @@ private:
     bool m_border{false};
 };
 
-/// Places the next sibling widget on the same line as the previous one
-/// (ImGui::SameLine). Use between widgets to lay them out horizontally.
+/// Place the next sibling widget on the same line as the previous one.
 class SGL_API SameLine : public Widget {
     SGL_OBJECT(SameLine)
 public:
@@ -411,11 +398,7 @@ private:
     float m_spacing;
 };
 
-/// Moves the draw cursor to a position relative to the window's content
-/// region top-left, so following sibling widgets can be placed at an
-/// explicit spot -- e.g. overlaid on top of a preceding Image in the same
-/// window. (Relative to the content origin, not the window origin, so it
-/// stays clear of the title/tab bar.)
+/// Move the draw cursor relative to the window content origin to place the next widget.
 class SGL_API CursorPos : public Widget {
     SGL_OBJECT(CursorPos)
 public:
@@ -886,12 +869,7 @@ private:
     InputTextFlags m_flags;
 };
 
-/// Displays a GPU texture using ImGui::Image.
-///
-/// The widget samples the texture directly through ImGui's renderer; no CPU
-/// readback. Pass any \c sgl::Texture (e.g. the output of a slangpy compute
-/// kernel) and it will be drawn at \c size pixels. If \c size has any zero
-/// component the texture's mip-0 dimensions are used.
+/// Displays a GPU texture. A zero \c size component uses the texture's mip-0 size.
 class SGL_API Image : public Widget {
     SGL_OBJECT(Image)
 public:
@@ -931,10 +909,7 @@ private:
     float2 m_uv1;
 };
 
-/// Clickable image (ImGui::ImageButton). Like \c Image but behaves as a
-/// button: invokes \c callback when clicked. Useful for texture-based
-/// icon toolbars. \c size is the image size in points (excludes the
-/// frame padding ImGui adds around it).
+/// Clickable image; invokes \c callback when clicked.
 class SGL_API ImageButton : public Widget {
     SGL_OBJECT(ImageButton)
 public:
@@ -988,31 +963,20 @@ private:
     float2 m_uv1;
 };
 
-/// Anchor used to place a plot's legend, mirroring ImPlotLocation_*.
-/// Compass-direction names (north = top, south = bottom, etc.).
+/// Plot legend anchor (mirrors ImPlotLocation_*).
 enum class LegendLocation : int {
     center = 0,
     north = 1 << 0,
     south = 1 << 1,
     west = 1 << 2,
     east = 1 << 3,
-    north_west = north | west, // top-left
-    north_east = north | east, // top-right (ImPlot default)
-    south_west = south | west, // bottom-left
-    south_east = south | east, // bottom-right
+    north_west = north | west,
+    north_east = north | east,
+    south_west = south | west,
+    south_east = south | east,
 };
 
-/// Real plotting via ImPlot. A single plot window with one or more line
-/// series, configurable axes (label, range, autofit), legend, grid.
-///
-/// Usage:
-///     plot = ui.Plot(parent, "frame time", x_label="frame", y_label="ms",
-///                    size=(0, 280), autofit_y=True)
-///     plot.add_line("ms", values_list)            # add or update a line
-///     plot.set_y_limits(0.0, 33.0)                # optional manual limit
-///
-/// Each `add_line` call replaces the named series' data. Series keep their
-/// label (used in the legend) and their values (a copy of the list).
+/// Plot via ImPlot: one or more line/histogram series with configurable axes and legend.
 class SGL_API Plot : public Widget {
     SGL_OBJECT(Plot)
 public:
@@ -1074,20 +1038,16 @@ public:
     }
     void clear_limits() { m_has_x_limits = m_has_y_limits = false; }
 
-    /// Per-series storage. Each series is either a line plot (ImPlot::PlotLine)
-    /// or a histogram (ImPlot::PlotHistogram). The histogram-only fields are
-    /// ignored for line series. `bins == -1` maps to ImPlotBin_Sturges
-    /// (auto-binning); a positive integer is taken literally.
+    /// Per-series storage (line or histogram).
     enum class SeriesKind { line, histogram };
     struct Series {
         SeriesKind kind{SeriesKind::line};
         std::vector<float> values;
-        int bins{-1}; // -1 -> ImPlotBin_Sturges
+        int bins{-1}; // -1 = auto
         double bar_scale{1.0};
     };
 
-    /// Set or update a named line series. Stored by name; calling again
-    /// with the same name replaces the values (and resets it to a line).
+    /// Set or replace a named line series.
     void add_line(std::string_view name, std::vector<float> values)
     {
         std::string n(name);
@@ -1098,10 +1058,7 @@ public:
             m_series_order.push_back(n);
     }
 
-    /// Set or update a named histogram series. Raw samples are passed in
-    /// `values`; ImPlot bins them on render. `bins == -1` uses
-    /// ImPlotBin_Sturges (auto). `bar_scale` widens or narrows the bars
-    /// (1.0 = full bin width).
+    /// Set or replace a named histogram series (\c bins -1 = auto).
     void add_histogram(std::string_view name, std::vector<float> values, int bins = -1, double bar_scale = 1.0)
     {
         std::string n(name);
@@ -1114,8 +1071,7 @@ public:
             m_series_order.push_back(n);
     }
 
-    /// Append a single sample to an existing series (rolls the buffer).
-    /// Works for both line and histogram series.
+    /// Append a sample to an existing series (rolling buffer).
     void push_to_line(std::string_view name, float value, size_t max_history = 0)
     {
         std::string n(name);
@@ -1127,14 +1083,7 @@ public:
             s.values.erase(s.values.begin(), s.values.end() - max_history);
     }
 
-    /// Set or replace the bar-groups overlay. Renders via
-    /// ImPlot::PlotBarGroups: one bar per group (x position) with `labels.size()`
-    /// segments per bar. If `stacked` is true segments stack to a column,
-    /// otherwise they sit side-by-side. `values_per_label[i]` is the series for
-    /// label `i`, indexed by group.
-    ///
-    /// All inner vectors must have the same length (= group count); shorter
-    /// ones are zero-padded on the fly at render time.
+    /// Set or replace the bar-groups overlay (ImPlot::PlotBarGroups).
     void add_bar_groups(
         std::vector<std::string> labels,
         std::vector<std::vector<float>> values_per_label,
@@ -1176,8 +1125,7 @@ private:
     bool m_legend_horizontal{false};
     std::map<std::string, Series> m_series;
     std::vector<std::string> m_series_order;
-    // Bar-groups overlay (PlotBarGroups). Stored separately from m_series
-    // because it's a multi-series block, not a single named series.
+    // Bar-groups overlay, stored apart from the named series.
     bool m_has_bar_groups{false};
     std::vector<std::string> m_bar_groups_labels;
     std::vector<std::vector<float>> m_bar_groups_values;
@@ -1185,11 +1133,7 @@ private:
     bool m_bar_groups_stacked{false};
 };
 
-/// Line plot of an in-memory float buffer (uses ImGui::PlotLines).
-///
-/// The internal buffer is a circular ring: \c push_value() rolls the newest
-/// sample in at the right. Useful for FPS / frame-time graphs without a full
-/// ImPlot dependency.
+/// Line plot of an in-memory float ring buffer (ImGui::PlotLines).
 class SGL_API PlotLines : public Widget {
     SGL_OBJECT(PlotLines)
 public:
@@ -1298,13 +1242,7 @@ public:
     virtual void render() override;
 };
 
-/// Full-viewport dock space. Add this to the Screen and dock Window widgets
-/// onto it (drag a window's title bar onto the central node, or use
-/// \c Window.dock_id() / set_dock_id() for programmatic docking).
-///
-/// To set up a split layout programmatically, call \c request_split_horizontal
-/// (or \c request_split_vertical), then on the next render the two child node
-/// ids are populated; assign them to two windows via \c Window.set_dock_id.
+/// Full-viewport dock space. Dock Window widgets onto it via \c Window.dock_id.
 class SGL_API DockSpace : public Widget {
     SGL_OBJECT(DockSpace)
 public:
@@ -1313,17 +1251,13 @@ public:
     {
     }
 
-    /// Root dock node id. Populated after the first render.
+    /// Root dock node id (valid after the first render).
     uint32_t dock_id() const { return m_dock_id; }
-    /// Left / right child node ids after a horizontal split (or top / bottom
-    /// after a vertical one). Populated once the requested split has been
-    /// applied. Zero until then.
+    /// Child node ids after a split (left/right, or top/bottom); 0 until applied.
     uint32_t left_dock_id() const { return m_left_id; }
     uint32_t right_dock_id() const { return m_right_id; }
 
-    /// Request the next render to (re)build a left/right split where the left
-    /// pane occupies \c ratio of the width. Causes any existing layout
-    /// for this dockspace to be reset.
+    /// Rebuild a left/right split on the next render (left pane = \c ratio of width).
     void request_split_horizontal(float ratio)
     {
         m_split_dir = SplitDir::Horizontal;
@@ -1337,19 +1271,11 @@ public:
         m_split_ratio = ratio;
     }
 
-    /// Split an already-existing dock node in two and return the child node
-    /// ids. \c node is a node id obtained earlier (e.g. \c left_dock_id()
-    /// after a root split). When \c vertical is true the split is top/bottom
-    /// (first = top), otherwise left/right (first = left); \c ratio is the
-    /// fraction taken by the first child. Must be called inside a frame
-    /// (between begin_frame / end_frame). Lets a pane be sub-divided so
-    /// several windows stack instead of tabbing onto one node.
+    /// Split an existing node, returning the two child ids (vertical = top/bottom,
+    /// else left/right; \c ratio = the first child's fraction). Call inside a frame.
     std::pair<uint32_t, uint32_t> split_node(uint32_t node, bool vertical, float ratio);
 
-    /// Make the central dock node transparent so the surface (or whatever
-    /// is rendered behind ImGui) shows through where no docked window
-    /// covers it. Useful for rendering a slangpy compute output to the
-    /// surface and overlaying floating control windows.
+    /// Make the central node transparent so content behind ImGui shows through.
     bool passthru_central_node() const { return m_passthru; }
     void set_passthru_central_node(bool v) { m_passthru = v; }
 

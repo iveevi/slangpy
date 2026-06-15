@@ -1,19 +1,8 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 //
-// Progressive path tracer -- analytic ray/primitive intersection.
-//
-// A Cornell-box-style enclosure built from five *bounded* quads (open
-// toward the camera) sitting in an analytic gradient sky, lit by four
-// small ceiling lights plus skylight through the opening. It mixes the
-// three classic material types:
-//   * walls / boxes  -- diffuse (bounded ray/quad, ray/oriented-box)
-//   * mirror sphere  -- perfect reflection (ray/sphere)
-//   * glass sphere   -- refraction + Fresnel (ray/sphere, dielectric)
-//   * tinted + accent diffuse spheres
-//
-// Diffuse surfaces use next-event estimation toward the ceiling lights;
-// metal and glass are handled as specular chains. Everything is solved
-// with closed-form ray/primitive intersection (no SDFs).
+// Progressive path tracer with analytic ray/primitive intersection: a
+// bounded Cornell-style box (diffuse walls + boxes, mirror and glass
+// spheres) in a gradient sky, with optional homogeneous fog.
 
 RWTexture2D<float4> g_output;
 RWTexture2D<float4> g_accum;
@@ -55,9 +44,6 @@ float3 rotate_y(float3 p, float a)
     return float3(ca * p.x + sa * p.z, p.y, -sa * p.x + ca * p.z);
 }
 
-// ===================================================== ray/primitive tests
-// Each test returns the nearest intersection with t > eps and writes the
-// hit distance `t` and the outward geometric normal `n`.
 
 static const float T_EPS = 1e-4;
 
@@ -82,9 +68,6 @@ bool hit_sphere(float3 ro, float3 rd, float3 c, float r, out float t, out float3
     return true;
 }
 
-// Bounded rectangle (quad): centre `c`, unit normal `nrm`, in-plane unit
-// axes `u`/`v` with half-extents `hu`/`hv`. Returns a hit only inside the
-// rectangle, so the walls are finite (the box floats in the sky).
 bool hit_quad(
     float3 ro,
     float3 rd,
@@ -150,20 +133,6 @@ bool hit_obb_y(float3 ro, float3 rd, float3 c, float3 b, float a, out float t, o
     return h;
 }
 
-// ================================================================ scene
-// Material codes:
-//   0  floor (diffuse)
-//   1  ceiling (diffuse)
-//   2  back wall (diffuse)
-//   3  left wall (diffuse red)
-//   4  right wall (diffuse green)
-//   5  mirror sphere (metal)
-//   6  glass sphere (refractive dielectric)
-//   7  tall box (diffuse)
-//   8  short box (diffuse)
-//   9  tinted sphere (user g_tint)
-//  10  accent sphere (yellow)
-//  30..33  ceiling lights (emissive: warm / cool / pink / lime)
 
 static const float BOX_W = 2.2;   // side walls at x = +/- BOX_W
 static const float BOX_H = 3.6;   // ceiling height
@@ -187,9 +156,6 @@ void consider(inout Hit best, bool did, float t, float3 n, int mat)
     }
 }
 
-// Ceiling lights: four square emitters flush under the ceiling, facing
-// straight down. Shared by the intersector and the NEE light sampler so
-// they stay in sync.
 static const int LIGHT_COUNT = 4;
 float3 light_center(int i)
 {
@@ -291,11 +257,6 @@ float3 emission(int mat)
     return float3(0.0);
 }
 
-// ============================================================ NEE light data
-// Pick one of the square lights uniformly, sample a point on it uniformly,
-// then trace a shadow ray. If unoccluded (the chosen light is the first
-// hit) return the Lambertian direct-lighting contribution, else zero. The
-// area-domain pdf is converted to solid angle via the geometry term.
 float3 sample_direct_lighting(float3 p, float3 n, float3 alb, inout RNG rng)
 {
     int idx = min(LIGHT_COUNT - 1, int(rand(rng) * float(LIGHT_COUNT)));
@@ -329,9 +290,6 @@ float3 sample_direct_lighting(float3 p, float3 n, float3 alb, inout RNG rng)
     return brdf * emit * geom * trans * (area * float(LIGHT_COUNT));
 }
 
-// =============================================================== sky
-// Analytic day-sky gradient: a bright near-white horizon easing up to a
-// deep blue zenith, and a muted ground tone below the horizon.
 float3 sky_dome(float3 dir)
 {
     float up = clamp(dir.y, -1.0, 1.0);
@@ -342,10 +300,6 @@ float3 sky_dome(float3 dir)
                        : lerp(horizon, ground, pow(-up, 0.6));
 }
 
-// ====================================================== homogeneous fog
-// Overlap interval [t0, t1] of the ray with the box interior (the only
-// region that holds fog), clamped to [0, t_hit]. Returns false if the ray
-// does not pass through any foggy span before the surface.
 bool fog_interval(float3 ro, float3 rd, float t_hit, out float t0, out float t1)
 {
     const float3 bmin = float3(-BOX_W, 0.0, BOX_BK);
@@ -371,9 +325,6 @@ float3 sample_sphere_uniform(inout RNG rng)
     return float3(r * cos(phi), r * sin(phi), z);
 }
 
-// Next-event estimation from a point inside the fog: identical to the
-// surface sampler but with an isotropic phase function (no surface
-// normal / cosine term) and transmittance along the shadow ray.
 float3 sample_fog_lighting(float3 p, inout RNG rng)
 {
     int idx = min(LIGHT_COUNT - 1, int(rand(rng) * float(LIGHT_COUNT)));
@@ -434,11 +385,6 @@ float3 pathtrace(float3 ro, float3 rd, float3 tint, inout RNG rng)
         Hit hit = scene_intersect(ro, rd);
         float t_hit = (hit.mat < 0) ? 1e30 : hit.t;
 
-        // Homogeneous fog, confined to the box interior. Sample a
-        // free-flight distance from where the ray enters the foggy span;
-        // if the medium interaction lands inside that span (before the
-        // surface), scatter isotropically (analog sampling, single-scatter
-        // albedo 1, so transmittance is implicit and throughput unchanged).
         if (g_fog_density > 0.0) {
             float ft0, ft1;
             if (fog_interval(ro, rd, t_hit, ft0, ft1)) {
@@ -462,8 +408,6 @@ float3 pathtrace(float3 ro, float3 rd, float3 tint, inout RNG rng)
         float3 ng = hit.n;
 
         if (is_light(hit.mat)) {
-            // Only count emission on primary/specular paths; for diffuse
-            // paths NEE already estimated this light's contribution.
             if (last_spec) L += throughput * emission(hit.mat);
             break;
         }
@@ -559,10 +503,6 @@ void compute_main(uint3 tid : SV_DispatchThreadID)
 
     float aspect = float(dims.x) / float(dims.y);
 
-    // Pixel antialiasing: trace AA_SAMPLES primary rays per frame, each
-    // offset by a random sub-pixel amount (box filter), and average them.
-    // This softens geometric edges every frame -- not just once the
-    // running mean converges -- so edges stay smooth during camera motion.
     float3 radiance = float3(0.0);
     [unroll]
     for (int s = 0; s < AA_SAMPLES; ++s)
@@ -586,8 +526,6 @@ void compute_main(uint3 tid : SV_DispatchThreadID)
     float3 c = mean * g_exposure;
     c = tonemap(c, g_tonemap);
     c = pow(c, 1.0 / 2.2);
-    // Triangular-PDF dither (~1 LSB at 8-bit) to break up the visible
-    // banding in the smooth sky gradient when shown on an 8-bit surface.
     c += (rand(rng) - rand(rng)) / 255.0;
     g_output[tid.xy] = float4(c, 1.0);
 }

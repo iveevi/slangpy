@@ -30,11 +30,8 @@ void Window::render()
     if (!m_visible)
         return;
 
-    // Constructor-provided position/size apply only the first time
-    // a window with this title is ever seen (i.e. no imgui.ini
-    // saved entry). On subsequent launches the layout persisted in
-    // imgui.ini wins. Explicit set_position / set_size calls below
-    // force-override regardless.
+    // Constructor pos/size apply only until imgui.ini has a saved layout;
+    // explicit set_position / set_size below always override.
     ImGui::SetNextWindowPos(ImVec2(m_position.x, m_position.y), ImGuiCond_FirstUseEver);
     ImGui::SetNextWindowSize(ImVec2(m_size.x, m_size.y), ImGuiCond_FirstUseEver);
 
@@ -53,26 +50,14 @@ void Window::render()
 
     ImGuiWindowFlags flags = 0;
     if (m_overlay) {
-        // Chrome-less floating overlay (e.g. a toolbar pinned over a
-        // viewport image). All public ImGui window flags.
-        // NB: no NoBringToFrontOnFocus -- the DockSpaceOverViewport
-        // host uses that flag to sit at the back, and a floating
-        // window sharing it would render *behind* docked windows
-        // (i.e. under the viewport image). Omitting it keeps the
-        // overlay above the docked viewport.
+        // Chrome-less overlay. Omit NoBringToFrontOnFocus so it stays above the docked viewport.
         flags |= ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove
             | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoDocking | ImGuiWindowFlags_NoNavFocus
             | ImGuiWindowFlags_NoBackground | ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoSavedSettings;
     } else if (!m_show_title_bar) {
         flags |= ImGuiWindowFlags_NoTitleBar;
-        // NoTitleBar only suppresses the *floating* title bar; once
-        // the window is docked, ImGui still draws a tab strip in the
-        // dock node. The WindowClass override below propagates the
-        // intent into the node's MergedFlags; we *also* poke
-        // LocalFlags directly post-Begin() because the WindowClass
-        // path only takes effect on the frame after Begin() and is
-        // not persisted to imgui.ini, so the first frame after a
-        // fresh layout still shows a tab strip.
+        // NoTitleBar hides only the floating title bar; the dock tab strip is
+        // suppressed via the window class here and LocalFlags after Begin().
         ImGuiWindowClass window_class;
         window_class.DockNodeFlagsOverrideSet = ImGuiDockNodeFlags_NoTabBar | ImGuiDockNodeFlags_NoDockingOverMe;
         ImGui::SetNextWindowClass(&window_class);
@@ -91,14 +76,9 @@ void Window::render()
         auto avail = ImGui::GetContentRegionAvail();
         m_content_size = float2(avail.x, avail.y);
 
-        // Force-hide the dock-node tab strip for chrome-less windows.
-        // Mutating LocalFlags directly is what DockBuilder does; it's
-        // persisted via imgui.ini so the fix sticks across restarts.
         if (!m_overlay && !m_show_title_bar) {
             if (ImGuiDockNode* node = ImGui::GetWindowDockNode()) {
-                // Mixing the private (ImGuiDockNodeFlagsPrivate_) and
-                // public (ImGuiDockNodeFlags_) enums triggers
-                // -Wdeprecated-enum-enum-conversion; cast through int.
+                // Cast through int: mixing the private and public dock-node enums warns.
                 node->LocalFlags |= (int)ImGuiDockNodeFlags_NoTabBar | (int)ImGuiDockNodeFlags_NoDockingSplit
                     | (int)ImGuiDockNodeFlags_NoCloseButton;
                 node->WantHiddenTabBarUpdate = true;
@@ -120,7 +100,6 @@ void Group::render()
     if (!m_visible)
         return;
 
-    // Check if this is a nested group
     bool nested = false;
     for (Widget* p = parent(); p != nullptr; p = p->parent())
         if (dynamic_cast<Group*>(p) != nullptr)
@@ -196,9 +175,7 @@ void Button::render()
     ScopedID id(this);
     ScopedDisable disable(!m_enabled);
     if (m_border) {
-        // 1px frame border in a visible colour (derived from the text
-        // colour) so it shows even when the global FrameBorderSize is 0
-        // and the theme's border colour is faint.
+        // Visible 1px border (from the text colour) even when the global border size is 0.
         ImVec4 bc = ImGui::GetStyleColorVec4(ImGuiCol_Text);
         bc.w *= 0.7f;
         ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1.0f);
@@ -334,8 +311,7 @@ void Image::render()
         return;
     ScopedID id(this);
     ScopedDisable disable(!m_enabled);
-    // A non-positive size component fills the available content region
-    // on that axis, so the image can stretch to fill its window.
+    // A non-positive size component fills the available region on that axis.
     ImVec2 avail = ImGui::GetContentRegionAvail();
     ImVec2 sz(m_size.x > 0.f ? m_size.x : avail.x, m_size.y > 0.f ? m_size.y : avail.y);
     if (sz.x <= 0.f || sz.y <= 0.f)
@@ -380,8 +356,7 @@ void Plot::render()
             y_flags
         );
         {
-            // Convert our enum (kept ABI-compatible with ImPlotLocation_)
-            // and toggle Outside via the legend flags.
+            // Map our enum to ImPlotLocation_ and toggle Outside.
             ImPlotLocation loc = static_cast<ImPlotLocation>(m_legend_location);
             ImPlotLegendFlags lf = 0;
             if (m_legend_outside)
@@ -401,7 +376,7 @@ void Plot::render()
             if (s.kind == SeriesKind::line) {
                 ImPlot::PlotLine(name.c_str(), s.values.data(), static_cast<int>(s.values.size()));
             } else {
-                // bins: -1 == ImPlotBin_Sturges; positive -> literal count.
+                // -1 = auto bin count.
                 int bins = (s.bins < 0) ? ImPlotBin_Sturges : s.bins;
                 ImPlot::PlotHistogram(
                     name.c_str(),
@@ -412,17 +387,14 @@ void Plot::render()
                 );
             }
         }
-        // Bar-groups overlay (PlotBarGroups). Useful for showing a
-        // per-component breakdown across groups -- e.g., stacked
-        // average frame-phase timings across N consecutive blocks.
+        // Bar-groups overlay (PlotBarGroups).
         if (m_has_bar_groups && !m_bar_groups_labels.empty()) {
             int item_count = static_cast<int>(m_bar_groups_labels.size());
             int group_count = 0;
             for (const auto& v : m_bar_groups_values)
                 group_count = std::max(group_count, static_cast<int>(v.size()));
             if (group_count > 0) {
-                // Flatten item-major into (item_count * group_count).
-                // Pad with zero for ragged series.
+                // Flatten item-major, zero-padding ragged series.
                 std::vector<float> flat(static_cast<size_t>(item_count) * group_count, 0.f);
                 for (int i = 0; i < item_count; ++i) {
                     const auto& src = m_bar_groups_values[i];

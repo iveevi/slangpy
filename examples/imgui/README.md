@@ -1,8 +1,8 @@
 # Fork feature demo
 
 A single program exercising every feature the `iveevi/slangpy` fork
-adds on top of upstream. See `docs/fork/` for the per-feature
-reference.
+adds on top of upstream. See the generated API reference (`slangpy.ui`)
+for per-widget documentation.
 
 The compute workload is a **progressive path tracer** using analytic
 ray/primitive intersection (ray-sphere, ray-plane, ray-box) -- not SDF
@@ -42,7 +42,7 @@ Run from the repo root after building slangpy. The compute shader
 
 | Feature | Where in the code |
 | --- | --- |
-| `spy.Window(decorated=False)` | *not exercised here* — covered in `docs/fork/window.rst`. Tiling WMs (niri etc.) may park borderless tiles off-viewport, so the demo uses the default `decorated=True`. |
+| `spy.Window(decorated=False)` | *not exercised here* — tiling WMs (niri etc.) may park borderless tiles off-viewport, so the demo uses the default `decorated=True`. |
 | `ui.Context.add_font(...)` | `_register_fonts` — body font becomes default |
 | `ui.Context.add_font(merge=True)` | `_register_fonts` — bundled FontAwesome (`fa-solid-900.ttf`) merged into the body font |
 | `ui.CursorPos` + `ui.Button` + `ui.SameLine` | FontAwesome action toolbar + sample-count readout drawn over the `viewport` image |

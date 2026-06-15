@@ -85,9 +85,7 @@ void Style::set_color(Col c, float4 v)
     imgui_style().Colors[idx] = ImVec4(v.x, v.y, v.z, v.w);
 }
 
-// Scalar field accessors -- each one is one read or one write of an
-// ImGuiStyle field. Field name on the ImGui side is the camelCase form
-// of the snake_case method name (e.g. window_padding -> WindowPadding).
+// One read/write per ImGuiStyle field.
 #define SGL_UI_STYLE_FLOAT_IMPL(name, ImGuiField)                                                                      \
     float Style::name() const                                                                                          \
     {                                                                                                                  \
@@ -165,10 +163,7 @@ SGL_UI_STYLE_FLOAT_IMPL(circle_tessellation_max_error, CircleTessellationMaxErro
 #undef SGL_UI_STYLE_VEC2_IMPL
 #undef SGL_UI_STYLE_BOOL_IMPL
 
-// ---------------------------------------------------------------------------
-// Default theme: applied once at Context construction. Same look as before
-// the Style class existed; users override via ctx.style after construction.
-// ---------------------------------------------------------------------------
+// Default theme, applied once at Context construction; override via ctx.style.
 
 // Note: These must match the definitions in the SW rasterizer shader.
 static constexpr size_t TRIANGLE_DATA_STRIDE = 64; // sizeof(TriangleData)
@@ -434,9 +429,7 @@ Context::Context(ref<Device> device)
     io.UserData = this;
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard | ImGuiConfigFlags_DockingEnable;
     io.BackendFlags |= ImGuiBackendFlags_RendererHasTextures;
-    // Persist docking layout so user-positioned windows survive restarts.
-    // ImGui writes/reads from this file in the process CWD; apps that want
-    // a custom path can SetCurrentContext + io.IniFilename before frames.
+    // Persist the docking layout across restarts (written to the process CWD).
     io.IniFilename = "imgui.ini";
     io.ConfigNavCaptureKeyboard = false;
 
@@ -520,9 +513,7 @@ void Context::add_font(const char* name, const char* path, float size, bool is_d
     ImGui::SetCurrentContext(m_imgui_context);
     ImGuiIO& io = ImGui::GetIO();
     ImFontConfig font_config;
-    // MergeMode overlays this font's glyphs onto the previously added font,
-    // so an icon font fills in glyphs the body font lacks. (ImGui 1.92 loads
-    // glyphs on demand, so no explicit GlyphRanges are required.)
+    // MergeMode overlays this font's glyphs onto the previous one (e.g. icons).
     font_config.MergeMode = merge;
     ImFont* font = io.Fonts->AddFontFromFileTTF(path, size, &font_config);
     if (!font) {
@@ -557,8 +548,7 @@ bool Context::is_any_item_hovered()
 float2 Context::calc_text_size(const char* text)
 {
     ImGui::SetCurrentContext(m_imgui_context);
-    // CalcTextSize dereferences the current font, which is only bound once
-    // a frame has started; guard so a pre-frame call can't crash.
+    // The current font is only bound once a frame has started; guard against a pre-frame call.
     if (ImGui::GetFrameCount() == 0)
         return float2(0.f, 0.f);
     ImVec2 s = ImGui::CalcTextSize(text);
@@ -607,12 +597,8 @@ void Context::end_frame(TextureView* texture_view, CommandEncoder* command_encod
         }
     }
 
-    // Transition every unique texture referenced by draw commands into
-    // shader_resource state. Without this, externally-supplied textures
-    // (e.g. ui::Image) are sampled while still in unordered_access /
-    // copy_destination from earlier work, producing black pixels. slang-rhi's
-    // per-encoder state tracker doesn't insert the UAV/COPY -> SRV barrier on
-    // foreign textures automatically.
+    // Transition foreign textures (e.g. ui::Image) to shader_resource; slang-rhi
+    // doesn't barrier them automatically, so otherwise they sample as black.
     {
         std::set<Texture*> seen;
         for (int n = 0; n < imgui_draw_data->CmdListsCount; n++) {
@@ -1057,10 +1043,7 @@ void Context::draw(
             render_state.scissor_rects[0] = clip_rect;
             ref<Texture> texture = ref<Texture>(static_cast<Texture*>(pcmd->GetTexID()));
 
-            // Re-bind the pipeline before each draw so slang-rhi allocates a
-            // fresh descriptor set with the new texture. Without this,
-            // mid-pass set_texture modifications don't reach the shader on
-            // subsequent draws and foreign textures sample as black.
+            // Re-bind per draw so slang-rhi allocates a fresh descriptor set for the new texture.
             shader_object = pass_encoder->bind_pipeline(get_render_pipeline(texture_view->desc().format));
             ShaderCursor sc(shader_object);
             sc["sampler"] = m_sampler;

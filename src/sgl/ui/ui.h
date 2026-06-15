@@ -22,9 +22,7 @@ struct ImGuiStyle;
 
 namespace sgl::ui {
 
-/// Mirror of ImGui's color slot enum. Kept here so callers can refer to
-/// `ui::Col::WindowBg` instead of `ImGuiCol_WindowBg`. Stays integer-
-/// compatible with ImGui's own enum, so the C++ side passes them through.
+/// Mirror of ImGui's color-slot enum (ImGuiCol_), integer-compatible with it.
 enum class Col : int {
     text,
     text_disabled,
@@ -90,14 +88,7 @@ enum class Col : int {
     modal_window_dim_bg,
 };
 
-/// Live wrapper around the active ImGui context's `ImGuiStyle`. All
-/// accessors read/write directly into ImGui's own struct, so mutations
-/// take effect on the next frame.
-///
-/// Field naming mirrors ImGui's `ImGuiStyle` in snake_case (e.g.
-/// `WindowPadding` -> `window_padding`, `FrameRounding` ->
-/// `frame_rounding`). Colors are accessed via `get_color(Col)` /
-/// `set_color(Col, float4)`.
+/// Live wrapper around the active ImGui style; fields mirror ImGuiStyle in snake_case.
 class SGL_API Style : public Object {
     SGL_OBJECT(Style)
 public:
@@ -115,8 +106,7 @@ public:
     /// Write a single color slot. RGBA float4 in [0, 1].
     void set_color(Col c, float4 value);
 
-// Scalar / vector accessors -- one pair per ImGuiStyle field.
-// Implementations are in ui.cpp to keep imgui.h out of headers.
+// Scalar/vector accessors, one pair per ImGuiStyle field (defined in ui.cpp).
 #define SGL_UI_STYLE_FLOAT(name)                                                                                       \
     float name() const;                                                                                                \
     void set_##name(float v);
@@ -187,36 +177,24 @@ public:
     /// The main screen widget.
     ref<Screen> screen() const { return m_screen; }
 
-    /// Live wrapper around the active ImGui style. Mutations take
-    /// effect on the next frame.
+    /// Live ImGui style wrapper.
     ref<Style> style() const { return m_style; }
 
     ImFont* get_font(const char* name);
 
-    /// Load a TTF font from disk and register it under \c name. The font is
-    /// rasterised at \c size pixels. If \c is_default is true the new font
-    /// becomes the default ImGui font (used unless PushFont is called).
-    /// If \c merge is true the glyphs are merged into the previously added
-    /// font (ImFontConfig::MergeMode) rather than creating a separate font.
-    /// This is how an icon font (e.g. FontAwesome) is overlaid onto a body
-    /// font so icon glyphs can be used inline in labels. \c is_default is
-    /// ignored when merging (the merged-into font keeps its default status).
-    /// Must be called BEFORE the first frame -- adding fonts mid-frame
-    /// invalidates ImGui's atlas.
+    /// Load and register a TTF font under \c name, rasterised at \c size px.
+    /// \c is_default makes it the default font; \c merge overlays its glyphs onto
+    /// the previous font (e.g. an icon font). Must be called before the first frame.
     void add_font(const char* name, const char* path, float size, bool is_default = false, bool merge = false);
 
-    /// Apply a previously-loaded font to subsequent widgets (until pop_font).
-    /// Convenience wrapper for ImGui::PushFont(get_font(name)).
+    /// Apply a registered font to subsequent widgets (until pop_font).
     void push_font(const char* name);
     void pop_font();
 
-    /// True if any interactive ImGui item is hovered (ImGui::IsAnyItemHovered).
-    /// Reflects the last rendered frame. Useful to tell apart a click on a
-    /// widget from a click on inert content (e.g. an Image) when routing input.
+    /// True if any interactive item is hovered (from the last frame).
     bool is_any_item_hovered();
 
-    /// Measure the rendered size of \c text with the current font
-    /// (ImGui::CalcTextSize). Useful for laying out / right-aligning labels.
+    /// Measure the rendered size of \c text with the current font.
     float2 calc_text_size(const char* text);
 
     /// Begin a new ImGui frame and renders the main screen widget.
