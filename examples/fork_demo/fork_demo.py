@@ -87,32 +87,8 @@ def _first_existing(paths: list[str]) -> Optional[str]:
     return None
 
 
-# Nord palette (https://www.nordtheme.com)
-# Polar Night
-NORD0 = (0.180, 0.204, 0.251, 1.0)  # #2E3440
-NORD1 = (0.231, 0.259, 0.322, 1.0)  # #3B4252
-NORD2 = (0.263, 0.298, 0.369, 1.0)  # #434C5E
-NORD3 = (0.298, 0.337, 0.416, 1.0)  # #4C566A
-# Snow Storm
-NORD4 = (0.847, 0.871, 0.914, 1.0)  # #D8DEE9
-NORD5 = (0.898, 0.914, 0.941, 1.0)  # #E5E9F0
-NORD6 = (0.925, 0.937, 0.957, 1.0)  # #ECEFF4
-# Frost
-NORD7 = (0.561, 0.737, 0.733, 1.0)  # #8FBCBB
-NORD8 = (0.533, 0.753, 0.816, 1.0)  # #88C0D0
-NORD9 = (0.506, 0.631, 0.757, 1.0)  # #81A1C1
-NORD10 = (0.369, 0.506, 0.675, 1.0)  # #5E81AC
-# Aurora
-NORD11 = (0.749, 0.380, 0.416, 1.0)  # #BF616A  red
-NORD12 = (0.816, 0.529, 0.439, 1.0)  # #D08770  orange
-NORD13 = (0.922, 0.796, 0.545, 1.0)  # #EBCB8B  yellow
-NORD14 = (0.639, 0.745, 0.549, 1.0)  # #A3BE8C  green
-NORD15 = (0.706, 0.557, 0.678, 1.0)  # #B48EAD  magenta
-
-
-def _c(rgba: tuple[float, float, float, float], a: Optional[float] = None) -> "spy.float4":
-    """Convenience: tuple -> spy.float4, optionally overriding alpha."""
-    return spy.float4(rgba[0], rgba[1], rgba[2], rgba[3] if a is None else a)
+# Default tint for the user-tinted sphere (Nord frost #88C0D0).
+TINT_DEFAULT = spy.float3(0.533, 0.753, 0.816)
 
 
 class ForkDemo:
@@ -255,109 +231,8 @@ class ForkDemo:
     # ---------------------------------------------------------------- style
 
     def _configure_style(self) -> None:
-        """Theme the app via ctx.style (live wrapper on ImGuiStyle).
-
-        Nord palette: Polar Night for surfaces, Snow Storm for text,
-        Frost for accents (sliders/buttons/grabs), Aurora for plot
-        series so they stand out.
-        """
-        s = self.ui.style
-        s.colors_dark()  # baseline so all slots have sensible alpha
-
-        # ----- shape / spacing -----------------------------------------
-        s.window_padding = spy.float2(14.0, 12.0)
-        s.frame_padding = spy.float2(10.0, 6.0)
-        s.item_spacing = spy.float2(10.0, 8.0)
-        s.window_rounding = 6.0
-        s.frame_rounding = 4.0
-        s.grab_rounding = 4.0
-        s.tab_rounding = 4.0
-        s.scrollbar_size = 0.0  # hide the gutter entirely
-        s.scrollbar_rounding = 0.0
-        # Flat, borderless surfaces (the rcgp-samples look): rounding does
-        # the shaping, no 1px outlines on windows or frames.
-        s.window_border_size = 0.0
-        s.frame_border_size = 0.0
-
-        # ----- Nord colour assignments ---------------------------------
-        # Backgrounds (Polar Night)
-        s.set_color(spy.ui.Col.window_bg, _c(NORD0))
-        s.set_color(spy.ui.Col.child_bg, _c(NORD0))
-        s.set_color(spy.ui.Col.popup_bg, _c(NORD1, 0.97))
-        s.set_color(spy.ui.Col.frame_bg, _c(NORD1))
-        s.set_color(spy.ui.Col.frame_bg_hovered, _c(NORD2))
-        s.set_color(spy.ui.Col.frame_bg_active, _c(NORD3))
-        s.set_color(spy.ui.Col.menu_bar_bg, _c(NORD1))
-        s.set_color(spy.ui.Col.title_bg, _c(NORD1))
-        s.set_color(spy.ui.Col.title_bg_active, _c(NORD10))
-        s.set_color(spy.ui.Col.title_bg_collapsed, _c(NORD0, 0.75))
-
-        # Border (Polar Night)
-        s.set_color(spy.ui.Col.border, _c(NORD3, 0.50))
-        s.set_color(spy.ui.Col.border_shadow, spy.float4(0, 0, 0, 0))
-
-        # Text (Snow Storm)
-        s.set_color(spy.ui.Col.text, _c(NORD6))
-        s.set_color(spy.ui.Col.text_disabled, _c(NORD3))
-        s.set_color(spy.ui.Col.text_selected_bg, _c(NORD10, 0.45))
-
-        # Buttons / sliders / headers (Frost)
-        s.set_color(spy.ui.Col.button, _c(NORD10))
-        s.set_color(spy.ui.Col.button_hovered, _c(NORD9))
-        s.set_color(spy.ui.Col.button_active, _c(NORD8))
-        s.set_color(spy.ui.Col.header, _c(NORD10, 0.55))
-        s.set_color(spy.ui.Col.header_hovered, _c(NORD9, 0.70))
-        s.set_color(spy.ui.Col.header_active, _c(NORD8, 0.80))
-        s.set_color(spy.ui.Col.slider_grab, _c(NORD8))
-        s.set_color(spy.ui.Col.slider_grab_active, _c(NORD7))
-        s.set_color(spy.ui.Col.check_mark, _c(NORD8))
-
-        # Separators (Polar Night)
-        s.set_color(spy.ui.Col.separator, _c(NORD3, 0.60))
-        s.set_color(spy.ui.Col.separator_hovered, _c(NORD9))
-        s.set_color(spy.ui.Col.separator_active, _c(NORD8))
-
-        # Resize grips
-        s.set_color(spy.ui.Col.resize_grip, _c(NORD3, 0.40))
-        s.set_color(spy.ui.Col.resize_grip_hovered, _c(NORD9, 0.70))
-        s.set_color(spy.ui.Col.resize_grip_active, _c(NORD8))
-
-        # Tabs. The selected tab of the *focused* dock node gets the bright
-        # accent fill plus a thick bright overline stripe on top; when the
-        # node loses focus its selected tab drops to a dark tone with no
-        # stripe, so the focused panel is unmistakable.
-        s.tab_bar_overline_size = 4.0
-        s.set_color(spy.ui.Col.tab, _c(NORD1))
-        s.set_color(spy.ui.Col.tab_hovered, _c(NORD3))
-        s.set_color(spy.ui.Col.tab_selected, _c(NORD10))
-        s.set_color(spy.ui.Col.tab_selected_overline, _c(NORD8))
-        s.set_color(spy.ui.Col.tab_dimmed, _c(NORD0))
-        s.set_color(spy.ui.Col.tab_dimmed_selected, _c(NORD1))
-        s.set_color(spy.ui.Col.tab_dimmed_selected_overline, _c(NORD1))
-
-        # Docking
-        s.set_color(spy.ui.Col.docking_preview, _c(NORD10, 0.70))
-        s.set_color(spy.ui.Col.docking_empty_bg, _c(NORD0))
-
-        # Scrollbars (hidden via scrollbar_size=0, but colour for completeness)
-        s.set_color(spy.ui.Col.scrollbar_bg, spy.float4(0, 0, 0, 0))
-        s.set_color(spy.ui.Col.scrollbar_grab, _c(NORD3))
-        s.set_color(spy.ui.Col.scrollbar_grab_hovered, _c(NORD9))
-        s.set_color(spy.ui.Col.scrollbar_grab_active, _c(NORD8))
-
-        # Plot colours (Aurora) -- ImPlot uses its own palette but the
-        # ImGui PlotLines / PlotHistogram fallback still hits these.
-        s.set_color(spy.ui.Col.plot_lines, _c(NORD8))
-        s.set_color(spy.ui.Col.plot_lines_hovered, _c(NORD7))
-        s.set_color(spy.ui.Col.plot_histogram, _c(NORD14))
-        s.set_color(spy.ui.Col.plot_histogram_hovered, _c(NORD13))
-
-        # Table
-        s.set_color(spy.ui.Col.table_header_bg, _c(NORD2))
-        s.set_color(spy.ui.Col.table_border_strong, _c(NORD3))
-        s.set_color(spy.ui.Col.table_border_light, _c(NORD2))
-        s.set_color(spy.ui.Col.table_row_bg, spy.float4(0, 0, 0, 0))
-        s.set_color(spy.ui.Col.table_row_bg_alt, _c(NORD1, 0.40))
+        """Use the stock ImGui dark theme (no custom styling)."""
+        self.ui.style.colors_dark()
 
     # -------------------------------------------------------------- widgets
 
@@ -416,7 +291,7 @@ class ForkDemo:
         self.tint = spy.ui.ColorPicker3(
             orbiting,
             "Tint Sphere",
-            value=spy.float3(NORD8[0], NORD8[1], NORD8[2]),
+            value=TINT_DEFAULT,
             callback=_reset,
         )
         spy.ui.Text(orbiting, "3 orbiting (ray-sphere)")
