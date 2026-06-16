@@ -33,6 +33,13 @@ Surface::Surface(WindowHandle window_handle, ref<Device> device)
     m_info.formats.resize(rhi_info.formatCount);
     for (size_t i = 0; i < rhi_info.formatCount; ++i)
         m_info.formats[i] = static_cast<Format>(rhi_info.formats[i]);
+
+    m_device_close_callback = m_device->register_device_close_callback(
+        [this](Device*)
+        {
+            m_rhi_surface.setNull();
+        }
+    );
 }
 
 Surface::Surface(Window* window, ref<Device> device)
@@ -40,7 +47,11 @@ Surface::Surface(Window* window, ref<Device> device)
 {
 }
 
-Surface::~Surface() { }
+Surface::~Surface()
+{
+    m_device->unregister_device_close_callback(m_device_close_callback);
+    m_rhi_surface.setNull();
+}
 
 void Surface::configure(const SurfaceConfig& config)
 {

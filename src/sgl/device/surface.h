@@ -72,5 +72,9 @@ private:
     std::optional<SurfaceConfig> m_config;
     ref<Device> m_device;
     Slang::ComPtr<rhi::ISurface> m_rhi_surface;
+    // Destroy the swapchain when the device closes (at exit, while the window is
+    // still alive) rather than during Python finalization, where the window may
+    // already be gone and driver swapchain teardown segfaults.
+    uint64_t m_device_close_callback{0};
 };
 } // namespace sgl
