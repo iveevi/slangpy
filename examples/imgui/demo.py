@@ -23,6 +23,12 @@ IMGUI_INI = "imgui.ini"
 GRIP_SIZE = 33.0
 
 
+# Per-axis render-target scale options (label -> fraction of viewport size).
+RESOLUTION_LABELS = ["1x", "1/2x", "1/4x"]
+RESOLUTION_SCALES = [1.0, 0.5, 0.25]
+RESOLUTION_DEFAULT = 2  # 1/4x
+
+
 # Number of frame-time bars shown in the performance bar-group chart.
 FRAME_BARS = 30
 
@@ -70,7 +76,6 @@ class ForkDemo:
         self.kernel = self.device.create_compute_kernel(program)
         self.pt_width = 1280
         self.pt_height = 720
-        self.render_scale = 0.25  # per-axis -> 1/16 the pixel count
         self.scene_texture: Optional[spy.Texture] = None  # tonemapped output
         self.accum_texture: Optional[spy.Texture] = None  # running mean
         self.sample_count = 0
@@ -170,6 +175,13 @@ class ForkDemo:
         self.light_pink = _light_slider("Pink Light")
         self.light_lime = _light_slider("Lime Light")
 
+        self.resolution = spy.ui.ComboBox(
+            self.render_window,
+            "Resolution",
+            value=RESOLUTION_DEFAULT,
+            items=RESOLUTION_LABELS,
+            callback=_reset,
+        )
         self.tonemap = spy.ui.ComboBox(
             self.render_window,
             "Tone Map",
@@ -189,6 +201,22 @@ class ForkDemo:
             value=0.05,
             min=0.0,
             max=0.6,
+            callback=_reset,
+        )
+        self.aperture = spy.ui.SliderFloat(
+            self.render_window,
+            "Aperture",
+            value=0.0,
+            min=0.0,
+            max=0.3,
+            callback=_reset,
+        )
+        self.focus_distance = spy.ui.SliderFloat(
+            self.render_window,
+            "Focus Distance",
+            value=self.cam_distance,
+            min=1.0,
+            max=25.0,
             callback=_reset,
         )
 
@@ -467,6 +495,8 @@ class ForkDemo:
                 "g_cam_up": cam_up,
                 "g_cam_forward": cam_fwd,
                 "g_focal": self.focal,
+                "g_aperture": self.aperture.value,
+                "g_focus_dist": self.focus_distance.value,
                 "g_light_intensity": spy.float4(
                     self.light_warm.value,
                     self.light_cool.value,
@@ -478,13 +508,14 @@ class ForkDemo:
         )
 
     def _size_pt_to_viewport(self) -> None:
-        """Size the PT render target to 1/16 the viewport resolution (a
-        quarter of the width and height of the viewport's content area)."""
+        """Size the PT render target to the selected per-axis fraction of the
+        viewport's content area (1x / 1/2x / 1/4x)."""
+        scale = RESOLUTION_SCALES[self.resolution.value]
         content = self.viewport_window.content_size
         disp_w = max(64.0, content.x)
         disp_h = max(64.0, content.y)
-        pt_w = max(64, int(disp_w * self.render_scale))
-        pt_h = max(64, int(disp_h * self.render_scale))
+        pt_w = max(64, int(disp_w * scale))
+        pt_h = max(64, int(disp_h * scale))
         self._ensure_pt_textures(pt_w, pt_h)
 
     def _update_spp_chip(self) -> None:
@@ -596,6 +627,8 @@ class ForkDemo:
                     "g_cam_up": cam_up,
                     "g_cam_forward": cam_fwd,
                     "g_focal": self.focal,
+                    "g_aperture": self.aperture.value,
+                    "g_focus_dist": self.focus_distance.value,
                     "g_light_intensity": spy.float4(
                         self.light_warm.value,
                         self.light_cool.value,

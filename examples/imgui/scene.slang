@@ -20,6 +20,8 @@ uniform float3 g_cam_right;
 uniform float3 g_cam_up;
 uniform float3 g_cam_forward;
 uniform float  g_focal;
+uniform float  g_aperture;    // thin-lens radius (0 = pinhole, no DoF)
+uniform float  g_focus_dist;  // distance to the sharp focal plane along forward
 
 uniform float4 g_light_intensity;   // per-light intensity (warm, cool, pink, lime)
 
@@ -316,6 +318,26 @@ bool fog_interval(float3 ro, float3 rd, float t_hit, out float t0, out float t1)
     return tf > tn && t1 > t0;
 }
 
+// Concentric (low-distortion) uniform sample on the unit disk.
+float2 sample_disk(inout RNG rng)
+{
+    float2 u = float2(rand(rng), rand(rng)) * 2.0 - 1.0;
+    if (u.x == 0.0 && u.y == 0.0)
+        return float2(0.0);
+    float r, theta;
+    if (abs(u.x) > abs(u.y))
+    {
+        r = u.x;
+        theta = 0.78539816 * (u.y / u.x);
+    }
+    else
+    {
+        r = u.y;
+        theta = 1.57079633 - 0.78539816 * (u.x / u.y);
+    }
+    return r * float2(cos(theta), sin(theta));
+}
+
 // Uniform direction on the sphere (isotropic phase function sampling).
 float3 sample_sphere_uniform(inout RNG rng)
 {
@@ -513,7 +535,18 @@ void compute_main(uint3 tid : SV_DispatchThreadID)
         uv.y = -uv.y;
         uv.x *= aspect;
         float3 ray_dir = normalize(uv.x * g_cam_right + uv.y * g_cam_up + g_focal * g_cam_forward);
-        radiance += pathtrace(g_cam_pos, ray_dir, g_tint, rng);
+        float3 ray_org = g_cam_pos;
+        if (g_aperture > 0.0)
+        {
+            // Thin-lens DoF: trace from a sampled lens point through the focal
+            // point where the pinhole ray meets the plane at g_focus_dist.
+            float cos_t = max(1e-4, dot(ray_dir, g_cam_forward));
+            float3 focal_point = g_cam_pos + ray_dir * (g_focus_dist / cos_t);
+            float2 lens = sample_disk(rng) * g_aperture;
+            ray_org = g_cam_pos + lens.x * g_cam_right + lens.y * g_cam_up;
+            ray_dir = normalize(focal_point - ray_org);
+        }
+        radiance += pathtrace(ray_org, ray_dir, g_tint, rng);
     }
     radiance *= (1.0 / float(AA_SAMPLES));
 
