@@ -1,8 +1,8 @@
 # SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 #
 # Demo exercising the iveevi/slangpy fork's spy.ui additions: a progressive
-# path tracer rendered into a dockable ui.Image viewport with plots, a scene
-# inspector, fonts and icons. F1 resets the layout, Esc quits.
+# path tracer rendered into a dockable ui.Image viewport with plots and a scene
+# inspector. F1 resets the layout, Esc quits.
 
 from __future__ import annotations
 
@@ -19,13 +19,8 @@ EXAMPLE_DIR = Path(__file__).parent
 IMGUI_INI = "imgui.ini"
 
 
-FONT_TEXT = EXAMPLE_DIR / "FiraSans-Regular.ttf"
-FONT_ICONS = EXAMPLE_DIR / "fa-solid-900.ttf"
-FONT_BODY_SIZE = 22.0
-FONT_HEADER_SIZE = 28.0
-
-ICON_RESET = "\uf021"  # arrows-rotate / refresh
-ICON_CAMERA = "\uf030"  # camera
+# Viewport resize-grip exclusion zone, in pixels.
+GRIP_SIZE = 33.0
 
 
 # Number of frame-time bars shown in the performance bar-group chart.
@@ -69,7 +64,6 @@ class ForkDemo:
             self.surface.configure(width=self.window.width, height=self.window.height)
 
         self.ui = spy.ui.Context(self.device)
-        self._register_fonts()
         self._configure_style()
 
         program = self.device.load_program("scene", ["compute_main"])
@@ -100,24 +94,6 @@ class ForkDemo:
         self._needs_layout = not Path(IMGUI_INI).exists()
         if self._needs_layout:
             self.dock.request_split_horizontal(0.27)
-
-    # ---------------------------------------------------------------- fonts
-
-    def _register_fonts(self) -> None:
-        """Register the bundled fonts. Fira Sans becomes the default (body)
-        font; FontAwesome is merged into it so icon glyphs render inline in
-        labels (add_font(merge=True)); the same face at a larger size is
-        kept as a named 'header' font for push_font('header')."""
-        self.ui.add_font("body", str(FONT_TEXT), FONT_BODY_SIZE, is_default=True)
-        # Merge must come right after the base font it overlays.
-        self.ui.add_font("icons", str(FONT_ICONS), FONT_BODY_SIZE, merge=True)
-        self.has_icons = True
-        self.ui.add_font("header", str(FONT_TEXT), FONT_HEADER_SIZE)
-
-    def _label(self, icon: str, text: str) -> str:
-        """Prefix `text` with `icon` glyph when an icon font is loaded,
-        else return the plain text."""
-        return f"{icon}  {text}" if self.has_icons else text
 
     # ---------------------------------------------------------------- style
 
@@ -236,14 +212,14 @@ class ForkDemo:
         spy.ui.CursorPos(self.viewport_window, spy.float2(12.0, 12.0))
         spy.ui.Button(
             self.viewport_window,
-            ICON_RESET if self.has_icons else "R",
+            "Reset",
             callback=_reset,
             border=True,
         )
         spy.ui.SameLine(self.viewport_window)
         spy.ui.Button(
             self.viewport_window,
-            ICON_CAMERA if self.has_icons else "S",
+            "Save",
             callback=self._save_screenshot,
             border=True,
         )
@@ -345,7 +321,7 @@ class ForkDemo:
         )
         if not in_image:
             return False
-        grip = 1.5 * FONT_BODY_SIZE
+        grip = GRIP_SIZE
         if px >= wp.x + ws.x - grip and py >= wp.y + ws.y - grip:
             return False
         if self.ui.is_any_item_hovered():

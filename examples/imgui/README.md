@@ -43,9 +43,7 @@ Run from the repo root after building slangpy. The compute shader
 | Feature | Where in the code |
 | --- | --- |
 | `spy.Window(decorated=False)` | *not exercised here* — tiling WMs (niri etc.) may park borderless tiles off-viewport, so the demo uses the default `decorated=True`. |
-| `ui.Context.add_font(...)` | `_register_fonts` — body font becomes default |
-| `ui.Context.add_font(merge=True)` | `_register_fonts` — bundled FontAwesome (`fa-solid-900.ttf`) merged into the body font |
-| `ui.CursorPos` + `ui.Button` + `ui.SameLine` | FontAwesome action toolbar + sample-count readout drawn over the `viewport` image |
+| `ui.CursorPos` + `ui.Button` + `ui.SameLine` | action toolbar + sample-count readout drawn over the `viewport` image |
 | `ui.Context.style` + `ui.Col` | `_configure_style` — scalar/vec2/bool fields, flat borderless surfaces, color slots |
 | `ui.DockSpace` + `passthru_central_node` | `_build_widgets` |
 | `ui.DockSpace.request_split_horizontal` | `__init__` (only when no `imgui.ini`) and F1 handler |
@@ -71,7 +69,5 @@ Run from the repo root after building slangpy. The compute shader
   directory.
 * If you want to start from a clean layout, hit F1 or delete
   `imgui.ini` between runs.
-* Fonts are bundled next to the demo (`FiraSans-Regular.ttf` and
-  `fa-solid-900.ttf`, both SIL OFL 1.1) and loaded by fixed path, so the
-  UI looks the same on every machine with no dependency on installed
-  system fonts.
+* The demo uses the `ui.Context` default font; it bundles no fonts of
+  its own.

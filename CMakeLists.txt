@@ -346,15 +346,6 @@ else()
 endif()
 
 # -----------------------------------------------------------------------------
-# Embedded resources
-# -----------------------------------------------------------------------------
-
-cmrc_add_resource_library(sgl_data
-    ${CMAKE_CURRENT_SOURCE_DIR}/data/fonts/Montserrat-Regular.ttf
-    ${CMAKE_CURRENT_SOURCE_DIR}/data/fonts/Inconsolata-Regular.ttf
-)
-
-# -----------------------------------------------------------------------------
 # Sources
 # -----------------------------------------------------------------------------
 

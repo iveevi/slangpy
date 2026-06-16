@@ -26,7 +26,6 @@
 #if ENABLE_IMGUI_DEMO_WINDOW
 #include <imgui_demo.cpp>
 #endif
-#include <cmrc/cmrc.hpp>
 
 #include <algorithm>
 #include <cstring>
@@ -34,8 +33,6 @@
 #include <unordered_map>
 #include <set>
 #include <vector>
-
-CMRC_DECLARE(sgl_data);
 
 namespace sgl::ui {
 
@@ -435,24 +432,10 @@ Context::Context(ref<Device> device)
 
     float scale_factor = platform::display_scale_factor();
 
-    // Load an embedded font.
-    auto load_embedded_font = [&](const char* name, const char* path)
-    {
-        ImFontConfig font_config;
-        font_config.FontDataOwnedByAtlas = false;
-        auto font_file = cmrc::sgl_data::get_filesystem().open(path);
-        ImFont* font = io.Fonts->AddFontFromMemoryTTF(
-            (void*)font_file.begin(),
-            (int)font_file.size(),
-            15.f * scale_factor,
-            &font_config
-        );
-        m_fonts[name] = font;
-    };
-
-    // Setup fonts.
-    load_embedded_font("default", "data/fonts/Montserrat-Regular.ttf");
-    load_embedded_font("monospace", "data/fonts/Inconsolata-Regular.ttf");
+    // Use ImGui's built-in default font; no external font assets are loaded.
+    ImFont* default_font = io.Fonts->AddFontDefault();
+    m_fonts["default"] = default_font;
+    m_fonts["monospace"] = default_font;
 
     // Setup style.
     setup_style();

@@ -419,7 +419,6 @@ target_link_libraries(sgl
         slang-rhi-vulkan-headers
         header_only
         $<$<NOT:$<BOOL:${SGL_USE_DYNAMIC_CUDA}>>:CUDA::cuda_driver>
-        sgl_data
     PRIVATE
         git_version
         glfw
