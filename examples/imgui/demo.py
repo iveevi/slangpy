@@ -2,7 +2,7 @@
 #
 # Demo exercising the iveevi/slangpy fork's spy.ui additions: a progressive
 # path tracer rendered into a dockable ui.Image viewport with plots and a scene
-# inspector. F1 resets the layout, Esc quits.
+# inspector. R resets the view, F1 resets the layout, Esc quits.
 
 from __future__ import annotations
 
@@ -29,14 +29,25 @@ RESOLUTION_SCALES = [1.0, 0.5, 0.25]
 RESOLUTION_DEFAULT = 2  # 1/4x
 
 
-# Number of frame-time bars shown in the performance bar-group chart.
+# Number of frame-time bars shown in the performance bar-group charts.
 FRAME_BARS = 30
+
+# Frames of GPU timestamp queries kept in flight; results are read back this
+# many frames later so the readback never stalls the GPU.
+GPU_TIMING_RING = 3
 
 SCENE_TIME = 1.5
 
 
 # Default tint for the user-tinted sphere (Nord frost #88C0D0).
 TINT_DEFAULT = spy.float3(0.533, 0.753, 0.816)
+
+
+# Initial orbit-camera pose, restored by the "Reset View" button.
+CAM_TARGET_DEFAULT = [0.0, 1.7, 0.0]  # roughly the box centre
+CAM_YAW_DEFAULT = 0.0
+CAM_PITCH_DEFAULT = 0.06  # radians; + looks down at the scene
+CAM_DISTANCE_DEFAULT = 5.3
 
 
 class ForkDemo:
@@ -74,16 +85,26 @@ class ForkDemo:
 
         program = self.device.load_program("scene", ["compute_main"])
         self.kernel = self.device.create_compute_kernel(program)
+
+        # GPU frame timing: a ring of timestamp pairs (start/end per frame).
+        # Disabled gracefully if the device lacks timestamp-query support.
+        self.gpu_timing = self.device.has_feature(spy.Feature.timestamp_query)
+        self.gpu_query_pool = (
+            self.device.create_query_pool(spy.QueryType.timestamp, 2 * GPU_TIMING_RING)
+            if self.gpu_timing
+            else None
+        )
+
         self.pt_width = 1280
         self.pt_height = 720
         self.scene_texture: Optional[spy.Texture] = None  # tonemapped output
         self.accum_texture: Optional[spy.Texture] = None  # running mean
         self.sample_count = 0
 
-        self.cam_target = [0.0, 1.7, 0.0]  # roughly the box centre
-        self.cam_yaw = 0.0
-        self.cam_pitch = 0.06  # radians; + looks down at the scene
-        self.cam_distance = 5.3
+        self.cam_target = list(CAM_TARGET_DEFAULT)
+        self.cam_yaw = CAM_YAW_DEFAULT
+        self.cam_pitch = CAM_PITCH_DEFAULT
+        self.cam_distance = CAM_DISTANCE_DEFAULT
         self.focal = 1.5
         self._mouse_down = {"left": False, "right": False, "middle": False}
         self._last_mouse: Optional[tuple[float, float]] = None
@@ -220,15 +241,26 @@ class ForkDemo:
             callback=_reset,
         )
 
-        self._frame_ms = [0.0] * FRAME_BARS
-        self._frame_ms_ema = 0.0
-        self.frame_plot = spy.ui.Plot(
+        self._cpu_ms = [0.0] * FRAME_BARS
+        self._cpu_ms_ema = 0.0
+        self.cpu_plot = spy.ui.Plot(
             self.perf_window,
-            label="Frame Time",
+            label="CPU Frame Time",
             y_label="ms",
             size=spy.float2(-1, -1),
         )
-        self.frame_plot.add_bar_groups(["ms"], [self._frame_ms])
+        self.cpu_plot.add_bar_groups(["ms"], [self._cpu_ms])
+
+        self._gpu_ms = [0.0] * FRAME_BARS
+        self._gpu_ms_ema = 0.0
+        gpu_label = "GPU Frame Time" if self.gpu_timing else "GPU Frame Time (unavailable)"
+        self.gpu_plot = spy.ui.Plot(
+            self.perf_window,
+            label=gpu_label,
+            y_label="ms",
+            size=spy.float2(-1, -1),
+        )
+        self.gpu_plot.add_bar_groups(["ms"], [self._gpu_ms])
 
         self.viewport_window.padding = spy.float2(0.0, 0.0)
         self.viewport_image = spy.ui.Image(
@@ -240,7 +272,14 @@ class ForkDemo:
         spy.ui.CursorPos(self.viewport_window, spy.float2(12.0, 12.0))
         spy.ui.Button(
             self.viewport_window,
-            "Reset",
+            "Reset View",
+            callback=self._reset_view,
+            border=True,
+        )
+        spy.ui.SameLine(self.viewport_window)
+        spy.ui.Button(
+            self.viewport_window,
+            "Reset Accum",
             callback=_reset,
             border=True,
         )
@@ -286,6 +325,8 @@ class ForkDemo:
             elif event.key == spy.KeyCode.space:
                 # Restart accumulation from scratch.
                 self.sample_count = 0
+            elif event.key == spy.KeyCode.r:
+                self._reset_view()
             elif event.key == spy.KeyCode.f1:
                 # Reset dock layout: drop imgui.ini, re-request a split.
                 try:
@@ -296,6 +337,14 @@ class ForkDemo:
                 self._needs_layout = True
 
     # ----------------------------------------------------- orbit camera
+
+    def _reset_view(self) -> None:
+        """Restore the orbit camera to its initial pose and restart accumulation."""
+        self.cam_target = list(CAM_TARGET_DEFAULT)
+        self.cam_yaw = CAM_YAW_DEFAULT
+        self.cam_pitch = CAM_PITCH_DEFAULT
+        self.cam_distance = CAM_DISTANCE_DEFAULT
+        self.sample_count = 0
 
     def _camera_basis(self) -> tuple[spy.float3, spy.float3, spy.float3, spy.float3]:
         """Return (position, right, up, forward) for the orbit camera."""
@@ -564,6 +613,41 @@ class ForkDemo:
         target.to_bitmap().write(out_path)
         print(f"[imgui_demo] headless screenshot ({width}x{height}, {frames} frames) -> {out_path}")
 
+    def _read_gpu_ms(self, slot: int, frame_counter: int) -> Optional[float]:
+        """Read back the GPU frame time (ms) recorded in `slot` GPU_TIMING_RING
+        frames ago, or None if timing is unavailable or the result is not ready
+        yet (so the caller holds the previous value rather than stalling)."""
+        if self.gpu_query_pool is None or frame_counter < GPU_TIMING_RING:
+            return None
+        base = slot * 2
+        if not self.gpu_query_pool.is_result_ready(base, 2):
+            return None
+        ts = self.gpu_query_pool.get_timestamp_results(base, 2)
+        return max(0.0, (ts[1] - ts[0]) * 1000.0)
+
+    def _push_timing(self, cpu_ms: float, gpu_ms: Optional[float]) -> None:
+        """Push one CPU/GPU sample onto the rolling bar charts. `gpu_ms` is None
+        on frames whose GPU result is not ready; the previous EMA is held."""
+        self._cpu_ms_ema = (
+            cpu_ms if self._cpu_ms_ema == 0.0 else 0.06 * cpu_ms + 0.94 * self._cpu_ms_ema
+        )
+        self._cpu_ms.append(self._cpu_ms_ema)
+        del self._cpu_ms[:-FRAME_BARS]
+        self.cpu_plot.add_bar_groups(["ms"], [self._cpu_ms])
+
+        if gpu_ms is not None:
+            self._gpu_ms_ema = (
+                gpu_ms if self._gpu_ms_ema == 0.0 else 0.06 * gpu_ms + 0.94 * self._gpu_ms_ema
+            )
+        self._gpu_ms.append(self._gpu_ms_ema)
+        del self._gpu_ms[:-FRAME_BARS]
+        self.gpu_plot.add_bar_groups(["ms"], [self._gpu_ms])
+
+        # Stack both charts in the panel: CPU on top, GPU fills the rest.
+        half = max(80.0, self.perf_window.content_size.y * 0.5)
+        self.cpu_plot.size = spy.float2(-1.0, half)
+        self.gpu_plot.size = spy.float2(-1.0, -1.0)
+
     def run(self) -> None:
         t_start = time.perf_counter()
         last_frame = t_start
@@ -580,21 +664,20 @@ class ForkDemo:
             if not surface_texture:
                 continue
 
-            # Frame time accounting.
+            # CPU frame time (wall clock); GPU time read back from the ring.
             now = time.perf_counter()
-            dt = now - last_frame
+            dt_ms = (now - last_frame) * 1000.0
             last_frame = now
-            dt_ms = dt * 1000.0
 
-            self._frame_ms_ema = (
-                dt_ms if frame_counter == 0 else 0.06 * dt_ms + 0.94 * self._frame_ms_ema
-            )
-            self._frame_ms.append(self._frame_ms_ema)
-            del self._frame_ms[:-FRAME_BARS]
-            self.frame_plot.add_bar_groups(["ms"], [self._frame_ms])
+            slot = frame_counter % GPU_TIMING_RING
+            qbase = slot * 2
+            self._push_timing(dt_ms, self._read_gpu_ms(slot, frame_counter))
 
             # ---- compute (path-tracer sample) ----
             command_encoder = self.device.create_command_encoder()
+            if self.gpu_query_pool is not None:
+                self.gpu_query_pool.reset(qbase, 2)
+                command_encoder.write_timestamp(self.gpu_query_pool, qbase)
             self._size_pt_to_viewport()
             assert self.scene_texture is not None and self.accum_texture is not None
 
@@ -645,6 +728,8 @@ class ForkDemo:
             self.ui.end_frame(surface_texture, command_encoder)
 
             # ---- present ----
+            if self.gpu_query_pool is not None:
+                command_encoder.write_timestamp(self.gpu_query_pool, qbase + 1)
             self.device.submit_command_buffer(command_encoder.finish())
             del surface_texture
             self.surface.present()
