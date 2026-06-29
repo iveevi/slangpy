@@ -33,6 +33,7 @@ static void bind_value_property(nb::module_ m, const char* name)
         .def_prop_rw("label", &T::label, &T::set_label)
         .def_prop_rw("value", &T::value, &T::set_value)
         .def_prop_rw("callback", &T::callback, &T::set_callback)
+        .def_prop_rw("width", &T::width, &T::set_width)
         .def("_get_callback", &T::callback);
 }
 

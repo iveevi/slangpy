@@ -477,6 +477,11 @@ public:
     Callback callback() const { return m_callback; }
     void set_callback(Callback callback) { m_callback = callback; }
 
+    /// Item width in pixels. 0 uses the ImGui default (~65% of the window width);
+    /// a negative value fills the content region (e.g. -FLT_MIN fills to the right edge).
+    float width() const { return m_width; }
+    void set_width(float width) { m_width = width; }
+
     void notify()
     {
         if (m_callback)
@@ -484,9 +489,16 @@ public:
     }
 
 protected:
+    void apply_width()
+    {
+        if (m_width != 0.f)
+            ImGui::SetNextItemWidth(m_width);
+    }
+
     std::string m_label;
     value_type m_value;
     Callback m_callback;
+    float m_width{0.f};
 };
 
 class SGL_API CheckBox : public ValueProperty<bool> {
@@ -653,6 +665,7 @@ public:
 
         ScopedID id(this);
         ScopedDisable disable(!m_enabled);
+        this->apply_width();
         bool changed = ImGui::DragScalarN(
             m_label.c_str(),
             DataTypeTraits<scalar_type>::data_type,
@@ -740,6 +753,7 @@ public:
 
         ScopedID id(this);
         ScopedDisable disable(!m_enabled);
+        this->apply_width();
         bool changed = ImGui::SliderScalarN(
             m_label.c_str(),
             DataTypeTraits<scalar_type>::data_type,
@@ -850,6 +864,7 @@ public:
 
         ScopedID id(this);
         ScopedDisable disable(!m_enabled);
+        this->apply_width();
         bool changed = ImGui::InputScalarN(
             m_label.c_str(),
             DataTypeTraits<scalar_type>::data_type,

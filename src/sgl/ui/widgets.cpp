@@ -243,6 +243,7 @@ void ComboBox::render()
     ScopedDisable disable(!m_enabled);
     int item_count = static_cast<int>(m_items.size());
     const char* preview = (m_value >= 0 && m_value < item_count) ? m_items[m_value].c_str() : "";
+    apply_width();
     if (ImGui::BeginCombo(m_label.c_str(), preview)) {
         for (int i = 0; i < item_count; i++) {
             bool is_selected = (m_value == i);
@@ -264,6 +265,7 @@ void ListBox::render()
 
     ScopedID id(this);
     ScopedDisable disable(!m_enabled);
+    apply_width();
     if (ImGui::ListBox(
             m_label.c_str(),
             &m_value,
@@ -298,6 +300,7 @@ void InputText::render()
 
     ScopedID id(this);
     ScopedDisable disable(!m_enabled);
+    apply_width();
     bool changed = false;
     if (m_multi_line) {
         changed = ImGui::InputTextMultiline(
@@ -457,6 +460,7 @@ void ColorEdit3::render()
         return;
     ScopedID id(this);
     ScopedDisable disable(!m_enabled);
+    apply_width();
     if (ImGui::ColorEdit3(m_label.c_str(), &m_value.x))
         notify();
 }
@@ -467,6 +471,7 @@ void ColorEdit4::render()
         return;
     ScopedID id(this);
     ScopedDisable disable(!m_enabled);
+    apply_width();
     if (ImGui::ColorEdit4(m_label.c_str(), &m_value.x))
         notify();
 }
@@ -477,6 +482,7 @@ void ColorPicker3::render()
         return;
     ScopedID id(this);
     ScopedDisable disable(!m_enabled);
+    apply_width();
     if (ImGui::ColorPicker3(m_label.c_str(), &m_value.x))
         notify();
 }
@@ -487,6 +493,7 @@ void ColorPicker4::render()
         return;
     ScopedID id(this);
     ScopedDisable disable(!m_enabled);
+    apply_width();
     if (ImGui::ColorPicker4(m_label.c_str(), &m_value.x))
         notify();
 }
