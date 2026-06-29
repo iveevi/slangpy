@@ -231,6 +231,19 @@ SGL_PY_EXPORT(ui_widgets)
         .def_prop_rw("border", &Button::border, &Button::set_border)
         .def("_get_callback", &Button::callback);
 
+    nb::class_<Selectable, Widget>(ui, "Selectable")
+        .def(
+            nb::init<Widget*, std::string_view, Selectable::Callback, bool>(),
+            "parent"_a.none(),
+            "label"_a = "",
+            "callback"_a = Selectable::Callback{},
+            "selected"_a = false
+        )
+        .def_prop_rw("label", &Selectable::label, &Selectable::set_label)
+        .def_prop_rw("callback", &Selectable::callback, &Selectable::set_callback)
+        .def_prop_rw("selected", &Selectable::selected, &Selectable::set_selected)
+        .def("_get_callback", &Selectable::callback);
+
     nb::class_<SameLine, Widget>(ui, "SameLine")
         .def(nb::init<Widget*, float, float>(), "parent"_a.none(), "offset_x"_a = 0.f, "spacing"_a = -1.f)
         .def_prop_rw("offset_x", &SameLine::offset_x, &SameLine::set_offset_x)

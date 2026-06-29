@@ -18,6 +18,7 @@ class Text;
 class TreeNode;
 class ProgressBar;
 class Button;
+class Selectable;
 template<typename T>
 class PropertyValue;
 class CheckBox;

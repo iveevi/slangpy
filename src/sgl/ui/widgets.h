@@ -374,6 +374,43 @@ private:
     bool m_border{false};
 };
 
+/// Selectable text row that highlights when selected and fires a callback on click.
+class SGL_API Selectable : public Widget {
+    SGL_OBJECT(Selectable)
+public:
+    using Callback = std::function<void()>;
+
+    Selectable(Widget* parent, std::string_view label = "", Callback callback = {}, bool selected = false)
+        : Widget(parent)
+        , m_label(label)
+        , m_callback(callback)
+        , m_selected(selected)
+    {
+    }
+
+    const std::string& label() const { return m_label; }
+    void set_label(std::string_view label) { m_label = label; }
+
+    Callback callback() const { return m_callback; }
+    void set_callback(Callback callback) { m_callback = callback; }
+
+    bool selected() const { return m_selected; }
+    void set_selected(bool selected) { m_selected = selected; }
+
+    void notify()
+    {
+        if (m_callback)
+            m_callback();
+    }
+
+    virtual void render() override;
+
+private:
+    std::string m_label;
+    Callback m_callback;
+    bool m_selected{false};
+};
+
 /// Place the next sibling widget on the same line as the previous one.
 class SGL_API SameLine : public Widget {
     SGL_OBJECT(SameLine)

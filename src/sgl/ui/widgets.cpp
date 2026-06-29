@@ -147,6 +147,17 @@ void Text::render()
     ImGui::TextUnformatted(m_text.c_str());
 }
 
+void Selectable::render()
+{
+    if (!m_visible)
+        return;
+
+    ScopedID id(this);
+    ScopedDisable disable(!m_enabled);
+    if (ImGui::Selectable(m_label.c_str(), m_selected, ImGuiSelectableFlags_SpanAvailWidth))
+        notify();
+}
+
 void Separator::render()
 {
     if (!m_visible)
