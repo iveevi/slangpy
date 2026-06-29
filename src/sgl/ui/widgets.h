@@ -454,6 +454,68 @@ private:
     float2 m_pos;
 };
 
+/// Main menu bar pinned to the top of the viewport. Add \c Menu children.
+class SGL_API MenuBar : public Widget {
+    SGL_OBJECT(MenuBar)
+public:
+    MenuBar(Widget* parent)
+        : Widget(parent)
+    {
+    }
+
+    virtual void render() override;
+};
+
+/// Drop-down menu hosted in a \c MenuBar (or nested in another \c Menu).
+class SGL_API Menu : public Widget {
+    SGL_OBJECT(Menu)
+public:
+    Menu(Widget* parent, std::string_view label = "")
+        : Widget(parent)
+        , m_label(label)
+    {
+    }
+
+    const std::string& label() const { return m_label; }
+    void set_label(std::string_view label) { m_label = label; }
+
+    virtual void render() override;
+
+private:
+    std::string m_label;
+};
+
+/// Clickable, optionally checkable item inside a \c Menu.
+class SGL_API MenuItem : public Widget {
+    SGL_OBJECT(MenuItem)
+public:
+    using Callback = std::function<void()>;
+
+    MenuItem(Widget* parent, std::string_view label = "", Callback callback = {}, bool checked = false)
+        : Widget(parent)
+        , m_label(label)
+        , m_callback(callback)
+        , m_checked(checked)
+    {
+    }
+
+    const std::string& label() const { return m_label; }
+    void set_label(std::string_view label) { m_label = label; }
+
+    bool checked() const { return m_checked; }
+    void set_checked(bool checked) { m_checked = checked; }
+
+    Callback callback() const { return m_callback; }
+    void set_callback(Callback callback) { m_callback = callback; }
+
+    virtual void render() override;
+
+private:
+    std::string m_label;
+    Callback m_callback;
+    bool m_checked;
+};
+
 template<typename T>
 class ValueProperty : public Widget {
 public:

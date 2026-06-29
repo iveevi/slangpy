@@ -254,6 +254,25 @@ SGL_PY_EXPORT(ui_widgets)
         .def(nb::init<Widget*, float2>(), "parent"_a.none(), "pos"_a = float2(0.f, 0.f))
         .def_prop_rw("pos", &CursorPos::pos, &CursorPos::set_pos);
 
+    nb::class_<MenuBar, Widget>(ui, "MenuBar").def(nb::init<Widget*>(), "parent"_a.none());
+
+    nb::class_<Menu, Widget>(ui, "Menu")
+        .def(nb::init<Widget*, std::string_view>(), "parent"_a.none(), "label"_a = "")
+        .def_prop_rw("label", &Menu::label, &Menu::set_label);
+
+    nb::class_<MenuItem, Widget>(ui, "MenuItem")
+        .def(
+            nb::init<Widget*, std::string_view, MenuItem::Callback, bool>(),
+            "parent"_a.none(),
+            "label"_a = "",
+            "callback"_a = MenuItem::Callback{},
+            "checked"_a = false
+        )
+        .def_prop_rw("label", &MenuItem::label, &MenuItem::set_label)
+        .def_prop_rw("checked", &MenuItem::checked, &MenuItem::set_checked)
+        .def_prop_rw("callback", &MenuItem::callback, &MenuItem::set_callback)
+        .def("_get_callback", &MenuItem::callback);
+
     bind_value_property<ValueProperty<bool>>(ui, "ValuePropertyBool");
     bind_value_property<ValueProperty<int>>(ui, "ValuePropertyInt");
     bind_value_property<ValueProperty<int2>>(ui, "ValuePropertyInt2");

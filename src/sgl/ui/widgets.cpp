@@ -223,6 +223,41 @@ void CursorPos::render()
     ImGui::SetCursorPos(ImVec2(start.x + m_pos.x, start.y + m_pos.y));
 }
 
+void MenuBar::render()
+{
+    if (!m_visible)
+        return;
+    ImFont* font = ImGui::GetIO().FontDefault;
+    if (font)
+        ImGui::PushFont(font);
+    if (ImGui::BeginMainMenuBar()) {
+        Widget::render();
+        ImGui::EndMainMenuBar();
+    }
+    if (font)
+        ImGui::PopFont();
+}
+
+void Menu::render()
+{
+    if (!m_visible)
+        return;
+    if (ImGui::BeginMenu(m_label.c_str(), m_enabled)) {
+        Widget::render();
+        ImGui::EndMenu();
+    }
+}
+
+void MenuItem::render()
+{
+    if (!m_visible)
+        return;
+    if (ImGui::MenuItem(m_label.c_str(), nullptr, m_checked, m_enabled)) {
+        if (m_callback)
+            m_callback();
+    }
+}
+
 void CheckBox::render()
 {
     if (!m_visible)
