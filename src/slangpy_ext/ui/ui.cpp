@@ -401,6 +401,12 @@ SGL_PY_EXPORT(ui)
         .def("pop_font", &ui::Context::pop_font)
         .def("is_any_item_hovered", &ui::Context::is_any_item_hovered)
         .def("calc_text_size", &ui::Context::calc_text_size, "text"_a)
+        .def_prop_rw(
+            "ini_filename",
+            &ui::Context::ini_filename,
+            [](ui::Context& self, std::optional<std::string> filename) { self.set_ini_filename(filename); },
+            nb::arg("filename").none()
+        )
         .def_prop_ro("screen", &ui::Context::screen, D(Context, screen))
         .def_prop_ro("style", &ui::Context::style);
 }

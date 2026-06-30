@@ -428,7 +428,8 @@ Context::Context(ref<Device> device)
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard | ImGuiConfigFlags_DockingEnable;
     io.BackendFlags |= ImGuiBackendFlags_RendererHasTextures;
     // Persist the docking layout across restarts (written to the process CWD).
-    io.IniFilename = "imgui.ini";
+    // Applications can override or disable this via set_ini_filename().
+    io.IniFilename = m_ini_filename.c_str();
     io.ConfigNavCaptureKeyboard = false;
 
     float scale_factor = platform::display_scale_factor();
@@ -521,6 +522,26 @@ void Context::pop_font()
 {
     ImGui::SetCurrentContext(m_imgui_context);
     ImGui::PopFont();
+}
+
+std::optional<std::string> Context::ini_filename() const
+{
+    if (!m_ini_enabled)
+        return std::nullopt;
+    return m_ini_filename;
+}
+
+void Context::set_ini_filename(std::optional<std::string> filename)
+{
+    ImGui::SetCurrentContext(m_imgui_context);
+    ImGuiIO& io = ImGui::GetIO();
+    m_ini_enabled = filename.has_value();
+    if (m_ini_enabled) {
+        m_ini_filename = *filename;
+        io.IniFilename = m_ini_filename.c_str();
+    } else {
+        io.IniFilename = nullptr;
+    }
 }
 
 bool Context::is_any_item_hovered()

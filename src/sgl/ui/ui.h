@@ -13,6 +13,8 @@
 #include "sgl/math/vector_types.h"
 
 #include <map>
+#include <optional>
+#include <string>
 
 struct ImGuiContext;
 struct ImDrawData;
@@ -191,6 +193,15 @@ public:
     void push_font(const char* name);
     void pop_font();
 
+    /// Path ImGui uses to persist window/dock layout, or std::nullopt when
+    /// persistence is disabled. Defaults to "imgui.ini".
+    std::optional<std::string> ini_filename() const;
+
+    /// Set the layout persistence file, or std::nullopt to disable writing/reading
+    /// any ini file (useful when the application manages its own layout). Must be
+    /// set before the first frame to prevent the default file from being loaded.
+    void set_ini_filename(std::optional<std::string> filename);
+
     /// True if any interactive item is hovered (from the last frame).
     bool is_any_item_hovered();
 
@@ -278,6 +289,8 @@ private:
     uint32_t m_frame_index{0};
     Timer m_frame_timer;
     float2 m_last_display_size{0.f, 0.f};
+    std::string m_ini_filename{"imgui.ini"};
+    bool m_ini_enabled{true};
 
     RenderMode m_render_mode{RenderMode::disabled};
 

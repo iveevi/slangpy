@@ -4,18 +4,22 @@ Fork of [shader-slang/slangpy](https://github.com/shader-slang/slangpy)
 that extends `spy.ui` for building real apps around slangpy compute
 output through ImGui — dockable windows, the slangpy-rendered scene as
 an `Image` widget, real ImPlot-backed graphs, programmatic docking
-with horizontal/vertical splits, fonts, a live `ImGuiStyle` view, layout
-persistence, color pickers and separators. Everything outside
-`src/sgl/ui/`, `src/slangpy_ext/ui/`, the `decorated`/`ui_context` flag
-additions, and the ImPlot fetch in `external/CMakeLists.txt` matches
-upstream verbatim.
+with horizontal/vertical splits (rebuildable at runtime), docked panels
+that rescale proportionally when the window resizes, menu bars / menus /
+menu items, selectable rows, tree nodes, per-widget item widths, fonts,
+a live `ImGuiStyle` view, configurable layout persistence (the ImGui ini
+file can be redirected or disabled via `Context.ini_filename`), color
+pickers and separators. Everything outside `src/sgl/ui/`,
+`src/slangpy_ext/ui/`, the `decorated`/`ui_context` flag additions, and
+the ImPlot fetch in `external/CMakeLists.txt` matches upstream verbatim.
 
 ## Documentation
 
 The `spy.ui` widgets (including the fork's additions — `Image`, `Plot`,
-`DockSpace`, `TreeNode`, `ColorEdit/Picker`, `Separator`, the font/style
-APIs, etc.) are documented in the generated API reference under the
-`slangpy.ui` namespace, sourced from the docstrings in `src/sgl/ui/`. The
+`DockSpace`, `TreeNode`, `MenuBar`/`Menu`/`MenuItem`, `Selectable`,
+`ColorEdit/Picker`, `Separator`, the font/style APIs, etc.) are documented
+in the generated API reference under the `slangpy.ui` namespace, sourced
+from the docstrings in `src/sgl/ui/`. The
 Sphinx docs build with:
 
 ```bash
