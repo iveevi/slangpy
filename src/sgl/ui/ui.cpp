@@ -22,6 +22,7 @@
 #include "sgl/device/pipeline.h"
 
 #include <imgui.h>
+#include <imgui_internal.h>
 #include <implot.h>
 #if ENABLE_IMGUI_DEMO_WINDOW
 #include <imgui_demo.cpp>
@@ -546,6 +547,24 @@ void Context::begin_frame(uint32_t width, uint32_t height, sgl::Window* window)
     io.DisplaySize = ImVec2(static_cast<float>(width), static_cast<float>(height));
     io.DeltaTime = static_cast<float>(m_frame_timer.elapsed_s());
     m_frame_timer.reset();
+
+    // Scale docked panels proportionally when the display size changes. ImGui's
+    // default policy keeps a side panel at its absolute SizeRef and lets the
+    // central node absorb the delta, so panels would otherwise stay a fixed
+    // pixel size on resize. Scaling every dock node's Size/SizeRef by the ratio
+    // preserves the user's manual splitter/dock adjustments.
+    if (m_last_display_size.x > 0.f && m_last_display_size.y > 0.f && width > 0 && height > 0
+        && (io.DisplaySize.x != m_last_display_size.x || io.DisplaySize.y != m_last_display_size.y)) {
+        const ImVec2 scale(io.DisplaySize.x / m_last_display_size.x, io.DisplaySize.y / m_last_display_size.y);
+        ImGuiContext& g = *m_imgui_context;
+        for (int n = 0; n < g.DockContext.Nodes.Data.Size; n++) {
+            if (ImGuiDockNode* node = static_cast<ImGuiDockNode*>(g.DockContext.Nodes.Data[n].val_p)) {
+                node->Size = ImVec2(node->Size.x * scale.x, node->Size.y * scale.y);
+                node->SizeRef = ImVec2(node->SizeRef.x * scale.x, node->SizeRef.y * scale.y);
+            }
+        }
+    }
+    m_last_display_size = float2(io.DisplaySize.x, io.DisplaySize.y);
 
     if (window)
         update_mouse_cursor(window);

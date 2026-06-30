@@ -277,6 +277,7 @@ private:
 
     uint32_t m_frame_index{0};
     Timer m_frame_timer;
+    float2 m_last_display_size{0.f, 0.f};
 
     RenderMode m_render_mode{RenderMode::disabled};
 
