@@ -248,15 +248,17 @@ SGL_PY_EXPORT(ui_widgets)
 
     nb::class_<Selectable, Widget>(ui, "Selectable")
         .def(
-            nb::init<Widget*, std::string_view, Selectable::Callback, bool>(),
+            nb::init<Widget*, std::string_view, Selectable::Callback, bool, float>(),
             "parent"_a.none(),
             "label"_a = "",
             "callback"_a = Selectable::Callback{},
-            "selected"_a = false
+            "selected"_a = false,
+            "indent"_a = 0.f
         )
         .def_prop_rw("label", &Selectable::label, &Selectable::set_label)
         .def_prop_rw("callback", &Selectable::callback, &Selectable::set_callback)
         .def_prop_rw("selected", &Selectable::selected, &Selectable::set_selected)
+        .def_prop_rw("indent", &Selectable::indent, &Selectable::set_indent)
         .def("_get_callback", &Selectable::callback);
 
     nb::class_<SameLine, Widget>(ui, "SameLine")

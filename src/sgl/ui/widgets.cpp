@@ -186,7 +186,13 @@ void Selectable::render()
 
     ScopedID id(this);
     ScopedDisable disable(!m_enabled);
-    if (ImGui::Selectable(m_label.c_str(), m_selected, ImGuiSelectableFlags_SpanAvailWidth))
+    const bool indented = m_indent != 0.f;
+    if (indented)
+        ImGui::Indent(m_indent);
+    const bool clicked = ImGui::Selectable(m_label.c_str(), m_selected, ImGuiSelectableFlags_SpanAvailWidth);
+    if (indented)
+        ImGui::Unindent(m_indent);
+    if (clicked)
         notify();
 }
 

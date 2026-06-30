@@ -421,11 +421,18 @@ class SGL_API Selectable : public Widget {
 public:
     using Callback = std::function<void()>;
 
-    Selectable(Widget* parent, std::string_view label = "", Callback callback = {}, bool selected = false)
+    Selectable(
+        Widget* parent,
+        std::string_view label = "",
+        Callback callback = {},
+        bool selected = false,
+        float indent = 0.f
+    )
         : Widget(parent)
         , m_label(label)
         , m_callback(callback)
         , m_selected(selected)
+        , m_indent(indent)
     {
     }
 
@@ -437,6 +444,9 @@ public:
 
     bool selected() const { return m_selected; }
     void set_selected(bool selected) { m_selected = selected; }
+
+    float indent() const { return m_indent; }
+    void set_indent(float indent) { m_indent = indent; }
 
     void notify()
     {
@@ -450,6 +460,7 @@ private:
     std::string m_label;
     Callback m_callback;
     bool m_selected{false};
+    float m_indent{0.f};
 };
 
 /// Place the next sibling widget on the same line as the previous one.
