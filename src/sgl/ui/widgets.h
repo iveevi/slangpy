@@ -273,6 +273,47 @@ private:
     bool m_set_open{false};
 };
 
+/// Table layout. Children are laid out into cells in row-major order across
+/// \c columns columns. Optional column \c headers render a header row.
+class SGL_API Table : public Widget {
+    SGL_OBJECT(Table)
+public:
+    Table(
+        Widget* parent,
+        std::string_view label = "",
+        int columns = 2,
+        std::vector<std::string> headers = {},
+        bool borders = true
+    )
+        : Widget(parent)
+        , m_label(label)
+        , m_columns(columns)
+        , m_headers(std::move(headers))
+        , m_borders(borders)
+    {
+    }
+
+    const std::string& label() const { return m_label; }
+    void set_label(std::string_view label) { m_label = label; }
+
+    int columns() const { return m_columns; }
+    void set_columns(int columns) { m_columns = columns; }
+
+    const std::vector<std::string>& headers() const { return m_headers; }
+    void set_headers(std::vector<std::string> headers) { m_headers = std::move(headers); }
+
+    bool borders() const { return m_borders; }
+    void set_borders(bool borders) { m_borders = borders; }
+
+    virtual void render() override;
+
+private:
+    std::string m_label;
+    int m_columns{2};
+    std::vector<std::string> m_headers;
+    bool m_borders{true};
+};
+
 class SGL_API Text : public Widget {
     SGL_OBJECT(Text)
 public:

@@ -137,6 +137,38 @@ void TreeNode::render()
     }
 }
 
+void Table::render()
+{
+    if (!m_visible)
+        return;
+    if (m_columns < 1)
+        return;
+
+    ScopedID id(this);
+    ScopedDisable disable(!m_enabled);
+
+    ImGuiTableFlags flags = ImGuiTableFlags_SizingStretchProp;
+    if (m_borders)
+        flags |= ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg;
+
+    if (ImGui::BeginTable(m_label.empty() ? "##table" : m_label.c_str(), m_columns, flags)) {
+        if (!m_headers.empty()) {
+            for (int i = 0; i < m_columns; ++i)
+                ImGui::TableSetupColumn(i < int(m_headers.size()) ? m_headers[i].c_str() : "");
+            ImGui::TableHeadersRow();
+        }
+        int col = 0;
+        for (const auto& child : m_children) {
+            if (col == 0)
+                ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(col);
+            child->render();
+            col = (col + 1) % m_columns;
+        }
+        ImGui::EndTable();
+    }
+}
+
 void Text::render()
 {
     if (!m_visible)

@@ -204,6 +204,20 @@ SGL_PY_EXPORT(ui_widgets)
         .def_prop_rw("label", &TreeNode::label, &TreeNode::set_label)
         .def_prop_rw("open", &TreeNode::open, &TreeNode::set_open);
 
+    nb::class_<Table, Widget>(ui, "Table")
+        .def(
+            nb::init<Widget*, std::string_view, int, std::vector<std::string>, bool>(),
+            "parent"_a.none(),
+            "label"_a = "",
+            "columns"_a = 2,
+            "headers"_a = std::vector<std::string>{},
+            "borders"_a = true
+        )
+        .def_prop_rw("label", &Table::label, &Table::set_label)
+        .def_prop_rw("columns", &Table::columns, &Table::set_columns)
+        .def_prop_rw("headers", &Table::headers, &Table::set_headers)
+        .def_prop_rw("borders", &Table::borders, &Table::set_borders);
+
     nb::class_<Text, Widget>(ui, "Text")
         .def(nb::init<Widget*, std::string_view>(), "parent"_a.none(), "text"_a = "", D(Text, Text))
         .def_prop_rw("text", &Text::text, &Text::set_text, D(Text, text));
