@@ -196,6 +196,11 @@ public:
     float2 padding() const { return m_padding; }
     void set_padding(const float2& padding) { m_padding = padding; }
 
+    /// Name of a font (registered via Context.add_font) for this window's content.
+    /// Empty uses the default font.
+    const std::string& font() const { return m_font; }
+    void set_font(std::string_view font) { m_font = font; }
+
     /// Content region size, captured on the last render.
     float2 content_size() const { return m_content_size; }
 
@@ -224,6 +229,7 @@ private:
     bool m_overlay{false};
     float2 m_padding{-1.f, -1.f};
     float2 m_content_size{0.f, 0.f};
+    std::string m_font;
 };
 
 class SGL_API Group : public Widget {

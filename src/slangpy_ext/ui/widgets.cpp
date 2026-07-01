@@ -193,6 +193,7 @@ SGL_PY_EXPORT(ui_widgets)
         .def_prop_rw("show_title_bar", &ui::Window::show_title_bar, &ui::Window::set_show_title_bar)
         .def_prop_rw("overlay", &ui::Window::overlay, &ui::Window::set_overlay)
         .def_prop_rw("padding", &ui::Window::padding, &ui::Window::set_padding)
+        .def_prop_rw("font", &ui::Window::font, &ui::Window::set_font)
         .def_prop_ro("content_size", &ui::Window::content_size);
 
     nb::class_<Group, Widget>(ui, "Group")

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: Apache-2.0 WITH LLVM-exception
 
 #include "sgl/ui/widgets.h"
+#include "sgl/ui/ui.h"
 
 #include <imgui.h>
 #include <imgui_internal.h>
@@ -85,9 +86,14 @@ void Window::render()
             }
         }
 
+        const bool pushed_font = !m_font.empty();
+        if (pushed_font)
+            ImGui::PushFont(m_font.c_str());
         ImGui::PushItemWidth(300);
         Widget::render();
         ImGui::PopItemWidth();
+        if (pushed_font)
+            ImGui::PopFont();
     }
     ImGui::End();
 
