@@ -245,6 +245,12 @@ SGL_PY_EXPORT(ui_widgets)
         .def_prop_rw("callback", &Button::callback, &Button::set_callback, D(Button, callback))
         .def_prop_rw("active", &Button::active, &Button::set_active)
         .def_prop_rw("border", &Button::border, &Button::set_border)
+        .def_prop_rw("font", &Button::font, &Button::set_font)
+        .def_prop_rw("small", &Button::small, &Button::set_small)
+        .def_prop_rw("font_size", &Button::font_size, &Button::set_font_size)
+        .def_prop_rw("size", &Button::size, &Button::set_size)
+        .def_prop_rw("align_right", &Button::align_right, &Button::set_align_right)
+        .def_prop_rw("frame_padding", &Button::frame_padding, &Button::set_frame_padding)
         .def("_get_callback", &Button::callback);
 
     nb::class_<Selectable, Widget>(ui, "Selectable")

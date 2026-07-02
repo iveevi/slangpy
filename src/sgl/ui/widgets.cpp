@@ -242,8 +242,49 @@ void Button::render()
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, accent);
         ImGui::PushStyleColor(ImGuiCol_ButtonActive, accent);
     }
-    if (ImGui::Button(m_label.c_str()))
+    // Capture the row's frame height before pushing any smaller label font, so a
+    // negative size component matches the surrounding widgets, not the small font.
+    const float frame = ImGui::GetFrameHeight();
+    const bool pushed_font = !m_font.empty();
+    if (pushed_font)
+        ImGui::PushFont(m_font.c_str(), m_font_size);
+    const bool pushed_padding = m_frame_padding.x >= 0.f || m_frame_padding.y >= 0.f;
+    if (pushed_padding) {
+        const ImVec2 fp = ImGui::GetStyle().FramePadding;
+        ImGui::PushStyleVar(
+            ImGuiStyleVar_FramePadding,
+            ImVec2(m_frame_padding.x >= 0.f ? m_frame_padding.x : fp.x, m_frame_padding.y >= 0.f ? m_frame_padding.y : fp.y)
+        );
+    }
+    bool clicked;
+    if (m_size.x != 0.f || m_size.y != 0.f || m_align_right) {
+        const ImVec2 pad = ImGui::GetStyle().FramePadding;
+        ImVec2 size(m_size.x < 0.f ? frame : m_size.x, m_size.y < 0.f ? frame : m_size.y);
+        // Resolve the on-screen extent (auto-sized components fall back to the
+        // label metrics) so alignment can be computed before drawing.
+        const float width = size.x > 0.f ? size.x : ImGui::CalcTextSize(m_label.c_str(), nullptr, true).x + pad.x * 2.f;
+        const float height = size.y > 0.f ? size.y : ImGui::GetFontSize() + pad.y * 2.f;
+        // Right-align to the content region so buttons form a consistent column
+        // regardless of the preceding item's width (slider vs. checkbox).
+        if (m_align_right) {
+            const float inset = ImGui::GetStyle().ItemSpacing.x;
+            const float avail = ImGui::GetContentRegionAvail().x;
+            ImGui::SetCursorPosX(ImGui::GetCursorPosX() + ImMax(0.f, avail - width - inset));
+        }
+        // Centre a sub-row-height button vertically so it lines up with the
+        // taller widgets sharing the row (e.g. sliders).
+        if (height < frame)
+            ImGui::SetCursorPosY(ImGui::GetCursorPosY() + (frame - height) * 0.5f);
+        clicked = ImGui::Button(m_label.c_str(), size);
+    } else {
+        clicked = m_small ? ImGui::SmallButton(m_label.c_str()) : ImGui::Button(m_label.c_str());
+    }
+    if (pushed_padding)
+        ImGui::PopStyleVar();
+    if (clicked)
         notify();
+    if (pushed_font)
+        ImGui::PopFont();
     if (m_active)
         ImGui::PopStyleColor(3);
     if (m_border) {

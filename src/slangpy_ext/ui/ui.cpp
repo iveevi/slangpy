@@ -400,6 +400,8 @@ SGL_PY_EXPORT(ui)
         .def("push_font", &ui::Context::push_font, "name"_a)
         .def("pop_font", &ui::Context::pop_font)
         .def("is_any_item_hovered", &ui::Context::is_any_item_hovered)
+        .def("save_settings", &ui::Context::save_settings)
+        .def("load_settings", &ui::Context::load_settings, "settings"_a)
         .def("calc_text_size", &ui::Context::calc_text_size, "text"_a)
         .def_prop_rw(
             "ini_filename",

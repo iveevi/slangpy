@@ -544,6 +544,20 @@ void Context::set_ini_filename(std::optional<std::string> filename)
     }
 }
 
+std::string Context::save_settings() const
+{
+    ImGui::SetCurrentContext(m_imgui_context);
+    size_t size = 0;
+    const char* data = ImGui::SaveIniSettingsToMemory(&size);
+    return std::string(data, size);
+}
+
+void Context::load_settings(std::string_view settings)
+{
+    ImGui::SetCurrentContext(m_imgui_context);
+    ImGui::LoadIniSettingsFromMemory(settings.data(), settings.size());
+}
+
 bool Context::is_any_item_hovered()
 {
     ImGui::SetCurrentContext(m_imgui_context);
@@ -1258,6 +1272,12 @@ void PushFont(const char* name)
 {
     sgl::ui::Context* ctx = static_cast<sgl::ui::Context*>(ImGui::GetIO().UserData);
     PushFont(ctx->get_font(name), 0.f);
+}
+
+void PushFont(const char* name, float size)
+{
+    sgl::ui::Context* ctx = static_cast<sgl::ui::Context*>(ImGui::GetIO().UserData);
+    PushFont(ctx->get_font(name), size);
 }
 
 } // namespace ImGui

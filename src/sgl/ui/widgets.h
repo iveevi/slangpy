@@ -406,6 +406,34 @@ public:
     bool border() const { return m_border; }
     void set_border(bool border) { m_border = border; }
 
+    /// Name of a font (registered via Context.add_font) for this button's label.
+    /// Empty uses the default font.
+    const std::string& font() const { return m_font; }
+    void set_font(std::string_view font) { m_font = font; }
+
+    /// Render as a compact button (no vertical frame padding).
+    bool small() const { return m_small; }
+    void set_small(bool small) { m_small = small; }
+
+    /// Pixel size for the label font. 0 inherits the current size.
+    float font_size() const { return m_font_size; }
+    void set_font_size(float size) { m_font_size = size; }
+
+    /// Explicit button size. A zero component auto-sizes to the label; a negative
+    /// component uses the current frame height (for square/row-aligned buttons).
+    float2 size() const { return m_size; }
+    void set_size(const float2& size) { m_size = size; }
+
+    /// Right-align the button to the content region (with a small inset), so it
+    /// sits in a consistent column regardless of the preceding item's width.
+    bool align_right() const { return m_align_right; }
+    void set_align_right(bool align_right) { m_align_right = align_right; }
+
+    /// Per-button frame padding override. A negative component keeps the style
+    /// default. Small symmetric padding centres an icon label tightly.
+    float2 frame_padding() const { return m_frame_padding; }
+    void set_frame_padding(const float2& padding) { m_frame_padding = padding; }
+
     void notify()
     {
         if (m_callback)
@@ -419,6 +447,12 @@ private:
     Callback m_callback;
     bool m_active{false};
     bool m_border{false};
+    bool m_small{false};
+    std::string m_font;
+    float m_font_size{0.f};
+    float2 m_size{0.f, 0.f};
+    bool m_align_right{false};
+    float2 m_frame_padding{-1.f, -1.f};
 };
 
 /// Selectable text row that highlights when selected and fires a callback on click.

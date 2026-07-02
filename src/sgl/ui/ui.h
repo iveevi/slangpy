@@ -202,6 +202,17 @@ public:
     /// set before the first frame to prevent the default file from being loaded.
     void set_ini_filename(std::optional<std::string> filename);
 
+    /// Serialize the current window layout and dock tree to an ini string,
+    /// equivalent to what would be written to the ini file. Lets the application
+    /// persist layout itself (e.g. embedded in its own settings file) instead of
+    /// relying on a separate ini file on disk.
+    std::string save_settings() const;
+
+    /// Load window layout and dock tree from an ini string previously produced by
+    /// \c save_settings. Applied on the next frame. Call before the first frame to
+    /// restore a saved layout.
+    void load_settings(std::string_view settings);
+
     /// True if any interactive item is hovered (from the last frame).
     bool is_any_item_hovered();
 
@@ -324,5 +335,6 @@ private:
 namespace ImGui {
 
 SGL_API void PushFont(const char* name);
+SGL_API void PushFont(const char* name, float size);
 
 }
